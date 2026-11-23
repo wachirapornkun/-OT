@@ -1,0 +1,374 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================
+    // Global Hardened Primitives
+    // =========================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser()
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() == 'wachirapornkun@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin()
+        || (isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidShortId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidMonthId(id) {
+      return id is string && id.size() == 7 && id.matches('^[0-9]{4}-[0-9]{2}$');
+    }
+
+    function isValidOptionalUid(val) {
+      return val is string && val.size() <= 128 && (val.size() == 0 || val.matches('^[a-zA-Z0-9_\\-]+$'));
+    }
+
+    function isValidShiftMap(m) {
+      return m is map && m.size() <= 31;
+    }
+
+    // =========================================================
+    // Entity Validation Blueprints (Anti-Update-Gap)
+    // =========================================================
+
+    function isValidAdminRecord(data, uid) {
+      return data.keys().hasAll(['uid', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'createdAt'])
+        && isValidId(data.uid)
+        && data.uid == uid
+        && data.createdAt is timestamp;
+    }
+
+    function isValidUserAccount(data, uid) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'linkedStaffId', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'linkedStaffId', 'role', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == uid
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.displayName is string && data.displayName.size() <= 120
+        && data.linkedStaffId is string && data.linkedStaffId.size() <= 64
+        && (data.linkedStaffId.size() == 0 || data.linkedStaffId.matches('^[a-zA-Z0-9_\\-]+$'))
+        && data.role is string && data.role in ['staff', 'admin']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDepartmentSettings(data) {
+      return data.keys().hasAll([
+          'hospitalName', 'departmentName',
+          'schedulerName', 'schedulerTitle', 'schedulerPosition',
+          'approverName', 'approverTitle', 'approverPosition',
+          'rnOtRate', 'rnWorkloadRate', 'rnStandbyRate',
+          'pnOtRate', 'pnWorkloadRate', 'pnStandbyRate',
+          'naOtRate', 'naWorkloadRate', 'naStandbyRate',
+          'visibility', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'hospitalName', 'departmentName',
+          'schedulerName', 'schedulerTitle', 'schedulerPosition',
+          'approverName', 'approverTitle', 'approverPosition',
+          'rnOtRate', 'rnWorkloadRate', 'rnStandbyRate', 'rnPublicHolidayOtRate',
+          'pnOtRate', 'pnWorkloadRate', 'pnStandbyRate', 'pnPublicHolidayOtRate',
+          'naOtRate', 'naWorkloadRate', 'naStandbyRate', 'naPublicHolidayOtRate',
+          'publicHolidayRateLabel',
+          'visibility', 'updatedAt'
+        ])
+        && data.hospitalName is string && data.hospitalName.size() >= 1 && data.hospitalName.size() <= 160
+        && data.departmentName is string && data.departmentName.size() >= 1 && data.departmentName.size() <= 160
+        && data.schedulerName is string && data.schedulerName.size() <= 120
+        && data.schedulerTitle is string && data.schedulerTitle.size() <= 160
+        && data.schedulerPosition is string && data.schedulerPosition.size() <= 160
+        && data.approverName is string && data.approverName.size() <= 120
+        && data.approverTitle is string && data.approverTitle.size() <= 160
+        && data.approverPosition is string && data.approverPosition.size() <= 160
+        && data.rnOtRate is number && data.rnOtRate >= 0 && data.rnOtRate <= 50000
+        && data.rnWorkloadRate is number && data.rnWorkloadRate >= 0 && data.rnWorkloadRate <= 50000
+        && data.rnStandbyRate is number && data.rnStandbyRate >= 0 && data.rnStandbyRate <= 50000
+        && (!('rnPublicHolidayOtRate' in data) || (data.rnPublicHolidayOtRate is number && data.rnPublicHolidayOtRate >= 0 && data.rnPublicHolidayOtRate <= 50000))
+        && data.pnOtRate is number && data.pnOtRate >= 0 && data.pnOtRate <= 50000
+        && data.pnWorkloadRate is number && data.pnWorkloadRate >= 0 && data.pnWorkloadRate <= 50000
+        && data.pnStandbyRate is number && data.pnStandbyRate >= 0 && data.pnStandbyRate <= 50000
+        && (!('pnPublicHolidayOtRate' in data) || (data.pnPublicHolidayOtRate is number && data.pnPublicHolidayOtRate >= 0 && data.pnPublicHolidayOtRate <= 50000))
+        && data.naOtRate is number && data.naOtRate >= 0 && data.naOtRate <= 50000
+        && data.naWorkloadRate is number && data.naWorkloadRate >= 0 && data.naWorkloadRate <= 50000
+        && data.naStandbyRate is number && data.naStandbyRate >= 0 && data.naStandbyRate <= 50000
+        && (!('naPublicHolidayOtRate' in data) || (data.naPublicHolidayOtRate is number && data.naPublicHolidayOtRate >= 0 && data.naPublicHolidayOtRate <= 50000))
+        && (!('publicHolidayRateLabel' in data) || (data.publicHolidayRateLabel is string && data.publicHolidayRateLabel.size() <= 100))
+        && data.visibility is string && data.visibility == 'department'
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStaffMember(data, staffId) {
+      return data.keys().hasAll([
+          'staffId', 'orderIndex', 'fullName', 'category',
+          'positionLabel', 'positionSubLabel', 'ownerUid',
+          'active', 'visibility', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'staffId', 'orderIndex', 'fullName', 'category',
+          'positionLabel', 'positionSubLabel', 'ownerUid',
+          'active', 'visibility', 'createdAt', 'updatedAt'
+        ])
+        && isValidShortId(data.staffId)
+        && data.staffId == staffId
+        && data.orderIndex is number && data.orderIndex >= 1 && data.orderIndex <= 999
+        && data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120
+        && data.category is string && data.category in ['RN', 'PN', 'NA']
+        && data.positionLabel is string && data.positionLabel.size() >= 1 && data.positionLabel.size() <= 100
+        && data.positionSubLabel is string && data.positionSubLabel.size() <= 120
+        && isValidOptionalUid(data.ownerUid)
+        && data.active is bool
+        && data.visibility is string && data.visibility == 'department'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRosterMonth(data, monthId) {
+      return data.keys().hasAll([
+          'monthId', 'yearAD', 'monthNumber', 'holidays',
+          'payDateLabel', 'status', 'visibility', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'monthId', 'yearAD', 'monthNumber', 'holidays', 'publicHolidays',
+          'payDateLabel', 'headerNote', 'workloadHeaderNote', 'smcHeaderNote',
+          'status', 'visibility', 'createdAt', 'updatedAt'
+        ])
+        && isValidMonthId(data.monthId)
+        && data.monthId == monthId
+        && data.yearAD is number && data.yearAD >= 2020 && data.yearAD <= 2100
+        && data.monthNumber is number && data.monthNumber >= 1 && data.monthNumber <= 12
+        && data.holidays is list && data.holidays.size() <= 31
+        && (data.holidays.size() == 0 || data.holidays[0] is number)
+        && (!('publicHolidays' in data) || (data.publicHolidays is list && data.publicHolidays.size() <= 31 && (data.publicHolidays.size() == 0 || data.publicHolidays[0] is number)))
+        && data.payDateLabel is string && data.payDateLabel.size() <= 40
+        && (!('headerNote' in data) || (data.headerNote is string && data.headerNote.size() <= 120))
+        && (!('workloadHeaderNote' in data) || (data.workloadHeaderNote is string && data.workloadHeaderNote.size() <= 120))
+        && (!('smcHeaderNote' in data) || (data.smcHeaderNote is string && data.smcHeaderNote.size() <= 120))
+        && data.status is string && data.status in ['open', 'locked']
+        && data.visibility is string && data.visibility == 'department'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidShiftEntry(data, monthId, staffId) {
+      return data.keys().hasAll([
+          'monthId', 'staffId', 'ownerUid',
+          'mainShifts', 'nightShifts', 'workloadShifts', 'standbyShifts',
+          'visibility', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'monthId', 'staffId', 'ownerUid',
+          'mainShifts', 'nightShifts', 'workloadShifts', 'standbyShifts', 'publicHolidayShifts', 'smcShifts',
+          'visibility', 'createdAt', 'updatedAt'
+        ])
+        && isValidMonthId(data.monthId)
+        && data.monthId == monthId
+        && isValidShortId(data.staffId)
+        && data.staffId == staffId
+        && isValidOptionalUid(data.ownerUid)
+        && isValidShiftMap(data.mainShifts)
+        && isValidShiftMap(data.nightShifts)
+        && isValidShiftMap(data.workloadShifts)
+        && isValidShiftMap(data.standbyShifts)
+        && (!('publicHolidayShifts' in data) || isValidShiftMap(data.publicHolidayShifts))
+        && (!('smcShifts' in data) || isValidShiftMap(data.smcShifts))
+        && data.visibility is string && data.visibility == 'department'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // =========================================================
+    // 1. Admins Collection (Locked Strictly to Verified Admins)
+    // =========================================================
+    match /admins/{uid} {
+      allow get: if isValidId(uid) && (isOwner(uid) || isAdmin());
+      allow list: if isBootstrappedAdmin() && resource.data.uid is string;
+      allow create: if isVerifiedUser()
+        && isValidId(uid)
+        && isValidAdminRecord(incoming(), uid)
+        && incoming().createdAt == request.time
+        && isAdmin();
+      allow update: if false;
+      allow delete: if isValidId(uid) && isAdmin();
+    }
+
+    // =========================================================
+    // 2. User Accounts Collection (Private PII Isolation)
+    // =========================================================
+    match /userAccounts/{uid} {
+      allow get: if isValidId(uid) && (isOwner(uid) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isSignedIn()
+        && isValidId(uid)
+        && isValidUserAccount(incoming(), uid)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (isOwner(uid) && incoming().role == 'staff')
+          || isAdmin()
+        );
+      allow update: if isSignedIn()
+        && isValidId(uid)
+        && isValidUserAccount(incoming(), uid)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'linkedStaffId', 'role', 'email', 'updatedAt']))
+          ||
+          (isOwner(uid)
+            && incoming().role == existing().role
+            && incoming().email == existing().email
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'linkedStaffId', 'updatedAt']))
+        );
+      allow delete: if isValidId(uid) && isAdmin();
+    }
+
+    // =========================================================
+    // 3. Department Settings (Non-PII Shared Ward Config & Rates)
+    // =========================================================
+    match /settings/{settingId} {
+      allow get: if isSignedIn() && isValidShortId(settingId) && (resource == null || resource.data.visibility == 'department');
+      allow list: if isSignedIn() && resource.data.visibility == 'department';
+      allow create: if isSignedIn()
+        && isValidShortId(settingId)
+        && settingId == 'department'
+        && isValidDepartmentSettings(incoming())
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidShortId(settingId)
+        && settingId == 'department'
+        && isValidDepartmentSettings(incoming())
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'hospitalName', 'departmentName',
+          'schedulerName', 'schedulerTitle', 'schedulerPosition',
+          'approverName', 'approverTitle', 'approverPosition',
+          'rnOtRate', 'rnWorkloadRate', 'rnStandbyRate', 'rnPublicHolidayOtRate',
+          'pnOtRate', 'pnWorkloadRate', 'pnStandbyRate', 'pnPublicHolidayOtRate',
+          'naOtRate', 'naWorkloadRate', 'naStandbyRate', 'naPublicHolidayOtRate',
+          'publicHolidayRateLabel',
+          'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // =========================================================
+    // 4. Staff Roster Profiles (Non-PII Shared Ward Roster)
+    // =========================================================
+    match /staff/{staffId} {
+      allow get: if isSignedIn() && isValidShortId(staffId) && (resource == null || resource.data.visibility == 'department');
+      allow list: if isSignedIn() && resource.data.visibility == 'department';
+      allow create: if isSignedIn()
+        && isValidShortId(staffId)
+        && isValidStaffMember(incoming(), staffId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidShortId(staffId)
+        && isValidStaffMember(incoming(), staffId)
+        && incoming().staffId == existing().staffId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'orderIndex', 'fullName', 'category', 'positionLabel',
+          'positionSubLabel', 'ownerUid', 'active', 'updatedAt'
+        ]);
+      allow delete: if isSignedIn() && isValidShortId(staffId) && existing().visibility == 'department';
+    }
+
+    // =========================================================
+    // 5. Roster Months & Subcollection: Shift Entries
+    // =========================================================
+    match /months/{monthId} {
+      allow get: if isSignedIn() && isValidMonthId(monthId) && (resource == null || resource.data.visibility == 'department');
+      allow list: if isSignedIn() && resource.data.visibility == 'department';
+      allow create: if isSignedIn()
+        && isValidMonthId(monthId)
+        && isValidRosterMonth(incoming(), monthId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidMonthId(monthId)
+        && isValidRosterMonth(incoming(), monthId)
+        && incoming().monthId == existing().monthId
+        && incoming().yearAD == existing().yearAD
+        && incoming().monthNumber == existing().monthNumber
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'holidays', 'publicHolidays', 'payDateLabel', 'headerNote', 'workloadHeaderNote', 'smcHeaderNote', 'status', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      // Master Gate Subcollection: Monthly Shift Entries
+      match /entries/{staffId} {
+        allow get: if isSignedIn() && isValidMonthId(monthId) && isValidShortId(staffId)
+          && (resource == null || resource.data.visibility == 'department');
+        allow list: if isSignedIn() && isValidMonthId(monthId)
+          && resource.data.visibility == 'department';
+        allow create: if isSignedIn()
+          && isValidMonthId(monthId)
+          && isValidShortId(staffId)
+          && isValidShiftEntry(incoming(), monthId, staffId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/months/$(monthId))
+          && exists(/databases/$(database)/documents/staff/$(staffId))
+          && get(/databases/$(database)/documents/months/$(monthId)).data.status == 'open';
+        allow update: if isSignedIn()
+          && isValidMonthId(monthId)
+          && isValidShortId(staffId)
+          && isValidShiftEntry(incoming(), monthId, staffId)
+          && incoming().monthId == existing().monthId
+          && incoming().staffId == existing().staffId
+          && incoming().ownerUid == existing().ownerUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/months/$(monthId))
+          && exists(/databases/$(database)/documents/staff/$(staffId))
+          && get(/databases/$(database)/documents/months/$(monthId)).data.status == 'open'
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'mainShifts', 'nightShifts', 'workloadShifts', 'standbyShifts', 'publicHolidayShifts', 'smcShifts', 'updatedAt'
+          ]);
+        allow delete: if false;
+      }
+    }
+  }
+}

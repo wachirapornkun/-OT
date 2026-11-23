@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "IBM Plex Sans Thai", sans-serif;
+  --font-sans: "Sarabun", "IBM Plex Sans Thai", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  html,
+  body {
+    font-family: var(--font-sans);
+    background-color: #f8fafc;
+    color: #0f172a;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.print-only {
+  display: none;
+}
+
+/* Official Thai Ministry of Public Health A4 Landscape Print Styles */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm 8mm 8mm 8mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    font-size: 11px !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .print-full-width {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .print-full-width .overflow-x-auto,
+  .print-full-width .overflow-hidden {
+    overflow: visible !important;
+  }
+
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  table {
+    page-break-inside: auto;
+    border-collapse: collapse !important;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+}

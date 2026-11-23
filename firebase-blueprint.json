@@ -1,0 +1,396 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "Admin Record",
+      "description": "Authorized department administrator UID record for RBAC.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "createdAt"]
+    },
+    "UserAccount": {
+      "title": "User Account (Private PII)",
+      "description": "Private user account metadata isolated per UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 254
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "linkedStaffId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "role": {
+          "type": "string",
+          "enum": ["staff", "admin"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "displayName", "linkedStaffId", "role", "createdAt", "updatedAt"]
+    },
+    "DepartmentSettings": {
+      "title": "Department Settings",
+      "description": "Hospital unit metadata, official signatories, and OT/Workload/Standby rates per category.",
+      "type": "object",
+      "properties": {
+        "hospitalName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "departmentName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "schedulerName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "schedulerTitle": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "schedulerPosition": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "approverName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "approverTitle": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "approverPosition": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "rnOtRate": {
+          "type": "number"
+        },
+        "rnWorkloadRate": {
+          "type": "number"
+        },
+        "rnStandbyRate": {
+          "type": "number"
+        },
+        "pnOtRate": {
+          "type": "number"
+        },
+        "pnWorkloadRate": {
+          "type": "number"
+        },
+        "pnStandbyRate": {
+          "type": "number"
+        },
+        "naOtRate": {
+          "type": "number"
+        },
+        "naWorkloadRate": {
+          "type": "number"
+        },
+        "naStandbyRate": {
+          "type": "number"
+        },
+        "rnPublicHolidayOtRate": {
+          "type": "number"
+        },
+        "pnPublicHolidayOtRate": {
+          "type": "number"
+        },
+        "naPublicHolidayOtRate": {
+          "type": "number"
+        },
+        "publicHolidayRateLabel": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["department"]
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "hospitalName",
+        "departmentName",
+        "schedulerName",
+        "schedulerTitle",
+        "schedulerPosition",
+        "approverName",
+        "approverTitle",
+        "approverPosition",
+        "rnOtRate",
+        "rnWorkloadRate",
+        "rnStandbyRate",
+        "pnOtRate",
+        "pnWorkloadRate",
+        "pnStandbyRate",
+        "naOtRate",
+        "naWorkloadRate",
+        "naStandbyRate",
+        "visibility",
+        "updatedAt"
+      ]
+    },
+    "StaffMember": {
+      "title": "Staff Member",
+      "description": "Department staff roster record (Nurse, Nursing Assistant, Patient Care Assistant).",
+      "type": "object",
+      "properties": {
+        "staffId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "orderIndex": {
+          "type": "number"
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "category": {
+          "type": "string",
+          "enum": ["RN", "PN", "NA"]
+        },
+        "positionLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "positionSubLabel": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["department"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "staffId",
+        "orderIndex",
+        "fullName",
+        "category",
+        "positionLabel",
+        "positionSubLabel",
+        "ownerUid",
+        "active",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "RosterMonth": {
+      "title": "Roster Month",
+      "description": "Monthly calendar metadata including official holidays, payment label, and lock status.",
+      "type": "object",
+      "properties": {
+        "monthId": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7,
+          "pattern": "^[0-9]{4}-[0-9]{2}$"
+        },
+        "yearAD": {
+          "type": "number"
+        },
+        "monthNumber": {
+          "type": "number"
+        },
+        "holidays": {
+          "type": "array"
+        },
+        "publicHolidays": {
+          "type": "array"
+        },
+        "payDateLabel": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "headerNote": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "workloadHeaderNote": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "smcHeaderNote": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "locked"]
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["department"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "monthId",
+        "yearAD",
+        "monthNumber",
+        "holidays",
+        "payDateLabel",
+        "status",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "MonthlyShiftEntry": {
+      "title": "Monthly Shift Entry",
+      "description": "Individual staff member shifts for a specific month across all 4 sections: working/OT, night OT, workload, and standby.",
+      "type": "object",
+      "properties": {
+        "monthId": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7,
+          "pattern": "^[0-9]{4}-[0-9]{2}$"
+        },
+        "staffId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "mainShifts": {
+          "type": "object"
+        },
+        "nightShifts": {
+          "type": "object"
+        },
+        "workloadShifts": {
+          "type": "object"
+        },
+        "standbyShifts": {
+          "type": "object"
+        },
+        "publicHolidayShifts": {
+          "type": "object"
+        },
+        "smcShifts": {
+          "type": "object"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["department"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "monthId",
+        "staffId",
+        "ownerUid",
+        "mainShifts",
+        "nightShifts",
+        "workloadShifts",
+        "standbyShifts",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Authorized department admin UIDs."
+    },
+    "/userAccounts/{uid}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Private user account records containing email PII."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/DepartmentSettings" },
+      "description": "Department configuration including hospital name, signatories, and OT rates."
+    },
+    "/staff/{staffId}": {
+      "schema": { "$ref": "#/entities/StaffMember" },
+      "description": "Department nursing, nursing assistant, and patient care assistant roster profiles."
+    },
+    "/months/{monthId}": {
+      "schema": { "$ref": "#/entities/RosterMonth" },
+      "description": "Monthly roster configuration, holidays, and lock state."
+    },
+    "/months/{monthId}/entries/{staffId}": {
+      "schema": { "$ref": "#/entities/MonthlyShiftEntry" },
+      "description": "Per-staff monthly shift schedule across all 4 shift categories."
+    }
+  }
+}
