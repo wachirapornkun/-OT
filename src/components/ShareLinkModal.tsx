@@ -63,6 +63,116 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
+export function buildInviteMessage(
+  departmentName: string,
+  hospitalName: string,
+  shareUrl: string,
+): string {
+  return [
+    `ลิงก์ระบบตารางเวรและเบิกค่าเวร OT`,
+    `${departmentName} ${hospitalName}`,
+    shareUrl,
+    `วิธีเข้าใช้งานครั้งแรก: กดแท็บ "สมัครใช้งานใหม่" เพื่อตั้ง User และรหัสผ่านของตัวเอง จากนั้นเลือกชื่อบุคลากรเพื่อลงเวรได้เลยครับ`,
+  ].join('\n');
+}
+
+export async function downloadQrPosterPng(params: {
+  qrDataUrl: string;
+  departmentName: string;
+  hospitalName: string;
+  shareUrl: string;
+}): Promise<void> {
+  const { qrDataUrl, departmentName, hospitalName, shareUrl } = params;
+  try {
+    const cardWidth = 720;
+    const cardHeight = 880;
+    const canvas = document.createElement('canvas');
+    canvas.width = cardWidth;
+    canvas.height = cardHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // White card background with subtle border
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, cardWidth, cardHeight);
+
+    // Top teal header band
+    ctx.fillStyle = '#0f766e';
+    ctx.fillRect(0, 0, cardWidth, 168);
+
+    // Header text
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 30px "Sarabun", "Noto Sans Thai", sans-serif';
+    ctx.fillText('ระบบตารางเวรและเบิกจ่ายค่าเวร OT', cardWidth / 2, 66);
+
+    ctx.font = '600 22px "Sarabun", "Noto Sans Thai", sans-serif';
+    ctx.fillStyle = '#ccfbf1';
+    ctx.fillText(departmentName, cardWidth / 2, 108);
+
+    ctx.font = '400 18px "Sarabun", "Noto Sans Thai", sans-serif';
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillText(hospitalName, cardWidth / 2, 140);
+
+    // Draw crisp QR code in center
+    const qrImg = new Image();
+    await new Promise<void>((resolve, reject) => {
+      qrImg.onload = () => resolve();
+      qrImg.onerror = () => reject(new Error('QR image load failed'));
+      qrImg.src = qrDataUrl;
+    });
+
+    const qrSize = 440;
+    const qrX = (cardWidth - qrSize) / 2;
+    const qrY = 212;
+
+    // Subtle frame around QR
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(qrX - 16, qrY - 16, qrSize + 32, qrSize + 32);
+    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+    // Footer instructions
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 24px "Sarabun", "Noto Sans Thai", sans-serif';
+    ctx.fillText('สแกน QR Code เพื่อเข้าลงเวรประจำเดือน', cardWidth / 2, 726);
+
+    ctx.fillStyle = '#475569';
+    ctx.font = '400 18px "Sarabun", "Noto Sans Thai", sans-serif';
+    ctx.fillText(
+      'เข้าใช้งานครั้งแรก: กด "สมัครใช้งานใหม่" เพื่อตั้ง User และรหัสผ่าน',
+      cardWidth / 2,
+      764,
+    );
+
+    // URL footer
+    ctx.fillStyle = '#64748b';
+    ctx.font = '400 14px monospace';
+    ctx.fillText(shareUrl, cardWidth / 2, 822);
+
+    // Outer border
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(2, 2, cardWidth - 4, cardHeight - 4);
+
+    const pngUrl = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = pngUrl;
+    link.download = 'QR_ระบบตารางเวร_วิสัญญี.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch {
+    // Fallback: download raw QR image directly
+    const link = document.createElement('a');
+    link.href = qrDataUrl;
+    link.download = 'QR_ระบบตารางเวร_วิสัญญี.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+
 export const ShareLinkModal: React.FC<ShareLinkModalProps> = ({
   isOpen,
   onClose,
@@ -115,12 +225,7 @@ export const ShareLinkModal: React.FC<ShareLinkModalProps> = ({
 
   if (!isOpen) return null;
 
-  const inviteMessage = [
-    `ลิงก์ระบบตารางเวรและเบิกค่าเวร OT`,
-    `${departmentName} ${hospitalName}`,
-    shareUrl,
-    `วิธีเข้าใช้งานครั้งแรก: กดแท็บ "สมัครใช้งานใหม่" เพื่อตั้ง User และรหัสผ่านของตัวเอง จากนั้นเลือกชื่อบุคลากรเพื่อลงเวรได้เลยครับ`,
-  ].join('\n');
+  const inviteMessage = buildInviteMessage(departmentName, hospitalName, shareUrl);
 
   const handleCopyUrl = async () => {
     const ok = await copyTextToClipboard(shareUrl);
@@ -140,93 +245,12 @@ export const ShareLinkModal: React.FC<ShareLinkModalProps> = ({
     if (!qrDataUrl || downloadingQr) return;
     setDownloadingQr(true);
     try {
-      const cardWidth = 720;
-      const cardHeight = 880;
-      const canvas = document.createElement('canvas');
-      canvas.width = cardWidth;
-      canvas.height = cardHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      // White card background with subtle border
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, cardWidth, cardHeight);
-
-      // Top teal header band
-      ctx.fillStyle = '#0f766e';
-      ctx.fillRect(0, 0, cardWidth, 168);
-
-      // Header text
-      ctx.fillStyle = '#ffffff';
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 30px "Sarabun", "Noto Sans Thai", sans-serif';
-      ctx.fillText('ระบบตารางเวรและเบิกจ่ายค่าเวร OT', cardWidth / 2, 66);
-
-      ctx.font = '600 22px "Sarabun", "Noto Sans Thai", sans-serif';
-      ctx.fillStyle = '#ccfbf1';
-      ctx.fillText(departmentName, cardWidth / 2, 108);
-
-      ctx.font = '400 18px "Sarabun", "Noto Sans Thai", sans-serif';
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillText(hospitalName, cardWidth / 2, 140);
-
-      // Draw crisp QR code in center
-      const qrImg = new Image();
-      await new Promise<void>((resolve, reject) => {
-        qrImg.onload = () => resolve();
-        qrImg.onerror = () => reject(new Error('QR image load failed'));
-        qrImg.src = qrDataUrl;
+      await downloadQrPosterPng({
+        qrDataUrl,
+        departmentName,
+        hospitalName,
+        shareUrl,
       });
-
-      const qrSize = 440;
-      const qrX = (cardWidth - qrSize) / 2;
-      const qrY = 212;
-
-      // Subtle frame around QR
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(qrX - 16, qrY - 16, qrSize + 32, qrSize + 32);
-      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-
-      // Footer instructions
-      ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 24px "Sarabun", "Noto Sans Thai", sans-serif';
-      ctx.fillText('สแกน QR Code เพื่อเข้าลงเวรประจำเดือน', cardWidth / 2, 726);
-
-      ctx.fillStyle = '#475569';
-      ctx.font = '400 18px "Sarabun", "Noto Sans Thai", sans-serif';
-      ctx.fillText(
-        'เข้าใช้งานครั้งแรก: กด "สมัครใช้งานใหม่" เพื่อตั้ง User และรหัสผ่าน',
-        cardWidth / 2,
-        764,
-      );
-
-      // URL footer
-      ctx.fillStyle = '#64748b';
-      ctx.font = '400 14px monospace';
-      ctx.fillText(shareUrl, cardWidth / 2, 822);
-
-      // Outer border
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 4;
-      ctx.strokeRect(2, 2, cardWidth - 4, cardHeight - 4);
-
-      const pngUrl = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.href = pngUrl;
-      link.download = 'QR_ระบบตารางเวร_วิสัญญี.png';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setCopiedType('qr-saved');
-    } catch {
-      // Fallback: download raw QR image directly
-      const link = document.createElement('a');
-      link.href = qrDataUrl;
-      link.download = 'QR_ระบบตารางเวร_วิสัญญี.png';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
       setCopiedType('qr-saved');
     } finally {
       setDownloadingQr(false);

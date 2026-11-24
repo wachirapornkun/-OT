@@ -159,6 +159,47 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidProductivityMap(p) {
+      return p is map
+        && p.keys().hasAll([
+          'mode', 'staffScope', 'hoursPerShift',
+          'includeWorkloadInOt', 'includeSmcInOt', 'includeStandbyInHours',
+          'gaCases', 'gaHoursPerCase',
+          'gaComplexCases', 'gaComplexHoursPerCase',
+          'regionalCases', 'regionalHoursPerCase',
+          'macCases', 'macHoursPerCase',
+          'clinicVisitCases', 'clinicVisitHoursPerCase',
+          'directRequiredHours'
+        ])
+        && p.keys().hasOnly([
+          'mode', 'staffScope', 'hoursPerShift',
+          'includeWorkloadInOt', 'includeSmcInOt', 'includeStandbyInHours',
+          'gaCases', 'gaHoursPerCase',
+          'gaComplexCases', 'gaComplexHoursPerCase',
+          'regionalCases', 'regionalHoursPerCase',
+          'macCases', 'macHoursPerCase',
+          'clinicVisitCases', 'clinicVisitHoursPerCase',
+          'directRequiredHours'
+        ])
+        && p.mode is string && p.mode in ['cases', 'directHours']
+        && p.staffScope is string && p.staffScope in ['RN', 'ALL']
+        && p.hoursPerShift is number && p.hoursPerShift >= 1 && p.hoursPerShift <= 24
+        && p.includeWorkloadInOt is bool
+        && p.includeSmcInOt is bool
+        && p.includeStandbyInHours is bool
+        && p.gaCases is number && p.gaCases >= 0 && p.gaCases <= 100000
+        && p.gaHoursPerCase is number && p.gaHoursPerCase >= 0 && p.gaHoursPerCase <= 48
+        && p.gaComplexCases is number && p.gaComplexCases >= 0 && p.gaComplexCases <= 100000
+        && p.gaComplexHoursPerCase is number && p.gaComplexHoursPerCase >= 0 && p.gaComplexHoursPerCase <= 48
+        && p.regionalCases is number && p.regionalCases >= 0 && p.regionalCases <= 100000
+        && p.regionalHoursPerCase is number && p.regionalHoursPerCase >= 0 && p.regionalHoursPerCase <= 48
+        && p.macCases is number && p.macCases >= 0 && p.macCases <= 100000
+        && p.macHoursPerCase is number && p.macHoursPerCase >= 0 && p.macHoursPerCase <= 48
+        && p.clinicVisitCases is number && p.clinicVisitCases >= 0 && p.clinicVisitCases <= 100000
+        && p.clinicVisitHoursPerCase is number && p.clinicVisitHoursPerCase >= 0 && p.clinicVisitHoursPerCase <= 48
+        && p.directRequiredHours is number && p.directRequiredHours >= 0 && p.directRequiredHours <= 500000;
+    }
+
     function isValidRosterMonth(data, monthId) {
       return data.keys().hasAll([
           'monthId', 'yearAD', 'monthNumber', 'holidays',
@@ -167,7 +208,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'monthId', 'yearAD', 'monthNumber', 'holidays', 'publicHolidays',
           'payDateLabel', 'headerNote', 'workloadHeaderNote', 'smcHeaderNote',
-          'status', 'visibility', 'createdAt', 'updatedAt'
+          'productivity', 'status', 'visibility', 'createdAt', 'updatedAt'
         ])
         && isValidMonthId(data.monthId)
         && data.monthId == monthId
@@ -180,6 +221,7 @@ service cloud.firestore {
         && (!('headerNote' in data) || (data.headerNote is string && data.headerNote.size() <= 120))
         && (!('workloadHeaderNote' in data) || (data.workloadHeaderNote is string && data.workloadHeaderNote.size() <= 120))
         && (!('smcHeaderNote' in data) || (data.smcHeaderNote is string && data.smcHeaderNote.size() <= 120))
+        && (!('productivity' in data) || isValidProductivityMap(data.productivity))
         && data.status is string && data.status in ['open', 'locked']
         && data.visibility is string && data.visibility == 'department'
         && data.createdAt is timestamp
@@ -333,7 +375,7 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && incoming().diff(existing()).affectedKeys().hasOnly([
-          'holidays', 'publicHolidays', 'payDateLabel', 'headerNote', 'workloadHeaderNote', 'smcHeaderNote', 'status', 'updatedAt'
+          'holidays', 'publicHolidays', 'payDateLabel', 'headerNote', 'workloadHeaderNote', 'smcHeaderNote', 'productivity', 'status', 'updatedAt'
         ]);
       allow delete: if false;
 

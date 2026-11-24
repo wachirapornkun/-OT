@@ -272,6 +272,10 @@
           "type": "string",
           "maxLength": 120
         },
+        "productivity": {
+          "type": "object",
+          "description": "Monthly anesthesiology nursing productivity parameters and case workload counts."
+        },
         "status": {
           "type": "string",
           "enum": ["open", "locked"]

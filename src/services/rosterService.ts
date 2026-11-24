@@ -26,6 +26,8 @@ import {
   SEED_OCTOBER_2569_DATA,
 } from '../data/seedOctober2569';
 import {
+  AnesthesiaProductivityInput,
+  DEFAULT_ANESTHESIA_PRODUCTIVITY,
   DEFAULT_DEPARTMENT_SETTINGS,
   DepartmentSettings,
   MainShiftCode,
@@ -43,6 +45,7 @@ import {
 import {
   getDefaultHolidaysForMonth,
   getDefaultPayDateLabel,
+  getDefaultPublicHolidaysForMonth,
   parseMonthId,
 } from '../utils/thaiUtils';
 
@@ -356,7 +359,9 @@ export async function ensureRosterMonth(monthId: string): Promise<RosterMonth> {
         ? OCTOBER_2569_HOLIDAYS
         : getDefaultHolidaysForMonth(yearAD, monthNumber);
     const publicHolidays =
-      monthId === OCTOBER_2569_MONTH_ID ? OCTOBER_2569_PUBLIC_HOLIDAYS : [];
+      monthId === OCTOBER_2569_MONTH_ID
+        ? OCTOBER_2569_PUBLIC_HOLIDAYS
+        : getDefaultPublicHolidaysForMonth(yearAD, monthNumber);
     const payDateLabel =
       monthId === OCTOBER_2569_MONTH_ID
         ? OCTOBER_2569_PAY_LABEL
@@ -406,6 +411,64 @@ export function subscribeRosterMonth(
   );
 }
 
+function sanitizeProductivityInput(
+  raw: Partial<AnesthesiaProductivityInput>,
+): AnesthesiaProductivityInput {
+  const clampNum = (val: unknown, fallback: number, min: number, max: number) => {
+    const n = Number(val);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.round(Math.max(min, Math.min(max, n)) * 100) / 100;
+  };
+  return {
+    mode: raw.mode === 'directHours' ? 'directHours' : 'cases',
+    staffScope: raw.staffScope === 'ALL' ? 'ALL' : 'RN',
+    hoursPerShift: clampNum(raw.hoursPerShift, DEFAULT_ANESTHESIA_PRODUCTIVITY.hoursPerShift, 1, 24),
+    includeWorkloadInOt: Boolean(
+      raw.includeWorkloadInOt ?? DEFAULT_ANESTHESIA_PRODUCTIVITY.includeWorkloadInOt,
+    ),
+    includeSmcInOt: Boolean(raw.includeSmcInOt ?? DEFAULT_ANESTHESIA_PRODUCTIVITY.includeSmcInOt),
+    includeStandbyInHours: Boolean(
+      raw.includeStandbyInHours ?? DEFAULT_ANESTHESIA_PRODUCTIVITY.includeStandbyInHours,
+    ),
+    gaCases: clampNum(raw.gaCases, 0, 0, 100000),
+    gaHoursPerCase: clampNum(
+      raw.gaHoursPerCase,
+      DEFAULT_ANESTHESIA_PRODUCTIVITY.gaHoursPerCase,
+      0,
+      48,
+    ),
+    gaComplexCases: clampNum(raw.gaComplexCases, 0, 0, 100000),
+    gaComplexHoursPerCase: clampNum(
+      raw.gaComplexHoursPerCase,
+      DEFAULT_ANESTHESIA_PRODUCTIVITY.gaComplexHoursPerCase,
+      0,
+      48,
+    ),
+    regionalCases: clampNum(raw.regionalCases, 0, 0, 100000),
+    regionalHoursPerCase: clampNum(
+      raw.regionalHoursPerCase,
+      DEFAULT_ANESTHESIA_PRODUCTIVITY.regionalHoursPerCase,
+      0,
+      48,
+    ),
+    macCases: clampNum(raw.macCases, 0, 0, 100000),
+    macHoursPerCase: clampNum(
+      raw.macHoursPerCase,
+      DEFAULT_ANESTHESIA_PRODUCTIVITY.macHoursPerCase,
+      0,
+      48,
+    ),
+    clinicVisitCases: clampNum(raw.clinicVisitCases, 0, 0, 100000),
+    clinicVisitHoursPerCase: clampNum(
+      raw.clinicVisitHoursPerCase,
+      DEFAULT_ANESTHESIA_PRODUCTIVITY.clinicVisitHoursPerCase,
+      0,
+      48,
+    ),
+    directRequiredHours: clampNum(raw.directRequiredHours, 0, 0, 500000),
+  };
+}
+
 export async function updateRosterMonthAdmin(
   monthId: string,
   updates: Partial<
@@ -418,6 +481,7 @@ export async function updateRosterMonthAdmin(
       | 'headerNote'
       | 'workloadHeaderNote'
       | 'smcHeaderNote'
+      | 'productivity'
     >
   >,
 ): Promise<void> {
@@ -445,6 +509,9 @@ export async function updateRosterMonthAdmin(
     }
     if (updates.smcHeaderNote !== undefined) {
       clean.smcHeaderNote = updates.smcHeaderNote.slice(0, 120);
+    }
+    if (updates.productivity !== undefined) {
+      clean.productivity = sanitizeProductivityInput(updates.productivity);
     }
     if (updates.status !== undefined) {
       clean.status = updates.status;

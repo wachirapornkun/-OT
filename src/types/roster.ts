@@ -68,6 +68,49 @@ export interface StaffMember {
   visibility: 'department';
 }
 
+export type ProductivityMode = 'cases' | 'directHours';
+export type ProductivityStaffScope = 'RN' | 'ALL';
+
+export interface AnesthesiaProductivityInput {
+  mode: ProductivityMode;
+  staffScope: ProductivityStaffScope;
+  hoursPerShift: number;
+  includeWorkloadInOt: boolean;
+  includeSmcInOt: boolean;
+  includeStandbyInHours: boolean;
+  gaCases: number;
+  gaHoursPerCase: number;
+  gaComplexCases: number;
+  gaComplexHoursPerCase: number;
+  regionalCases: number;
+  regionalHoursPerCase: number;
+  macCases: number;
+  macHoursPerCase: number;
+  clinicVisitCases: number;
+  clinicVisitHoursPerCase: number;
+  directRequiredHours: number;
+}
+
+export const DEFAULT_ANESTHESIA_PRODUCTIVITY: AnesthesiaProductivityInput = {
+  mode: 'cases',
+  staffScope: 'RN',
+  hoursPerShift: 7,
+  includeWorkloadInOt: true,
+  includeSmcInOt: true,
+  includeStandbyInHours: false,
+  gaCases: 0,
+  gaHoursPerCase: 3.5,
+  gaComplexCases: 0,
+  gaComplexHoursPerCase: 5.0,
+  regionalCases: 0,
+  regionalHoursPerCase: 2.5,
+  macCases: 0,
+  macHoursPerCase: 1.5,
+  clinicVisitCases: 0,
+  clinicVisitHoursPerCase: 0.5,
+  directRequiredHours: 0,
+};
+
 export interface RosterMonth {
   monthId: string; // YYYY-MM (AD)
   yearAD: number;
@@ -78,6 +121,7 @@ export interface RosterMonth {
   headerNote?: string; // ข้อความมุมขวาบนตาราง OT (16pt, default 'OT')
   workloadHeaderNote?: string; // ข้อความมุมขวาบนตาราง Workload (16pt, default 'Workload')
   smcHeaderNote?: string; // ข้อความมุมขวาบนตาราง SMC (16pt, default 'SMC')
+  productivity?: AnesthesiaProductivityInput; // ข้อมูลภาระงานวิสัญญีสำหรับคิด Productivity ประจำเดือน
   status: 'open' | 'locked';
   visibility: 'department';
 }

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import {
+  BarChart3,
   CalendarCheck,
   ChevronLeft,
   ChevronRight,
@@ -40,8 +41,10 @@ import { OCTOBER_2569_MONTH_ID } from './data/seedOctober2569';
 import { calculatePersonMonthlySummary } from './utils/rosterCalculations';
 import {
   formatMonthId,
+  getCurrentMonthId,
   getDefaultHolidaysForMonth,
   getDefaultPayDateLabel,
+  getDefaultPublicHolidaysForMonth,
   getThaiMonthYearLabel,
   parseMonthId,
 } from './utils/thaiUtils';
@@ -54,6 +57,7 @@ import { DepartmentRosterView } from './components/DepartmentRosterView';
 import { WorkloadRosterView } from './components/WorkloadRosterView';
 import { SmcRosterView } from './components/SmcRosterView';
 import { ReimbursementView } from './components/ReimbursementView';
+import { DashboardView } from './components/DashboardView';
 import { StaffDirectoryView } from './components/StaffDirectoryView';
 import { DepartmentSettingsView } from './components/DepartmentSettingsView';
 import { PrintA4Modal } from './components/PrintA4Modal';
@@ -70,6 +74,7 @@ type ActiveView =
   | 'workload-roster'
   | 'smc-roster'
   | 'reimbursement'
+  | 'dashboard'
   | 'staff'
   | 'settings';
 
@@ -81,13 +86,15 @@ const NAV_ITEMS: { id: ActiveView; label: string; icon: React.FC<{ className?: s
   { id: 'workload-roster', label: 'ตารางเวร Workload', icon: ClipboardCheck },
   { id: 'smc-roster', label: 'ตารางเวร SMC', icon: Stethoscope },
   { id: 'reimbursement', label: 'ตารางเบิกเงิน OT', icon: FileSpreadsheet },
+  { id: 'dashboard', label: 'แดชบอร์ด OT & Productivity', icon: BarChart3 },
   { id: 'staff', label: 'จัดการบุคลากร', icon: Users },
   { id: 'settings', label: 'ตั้งค่าอัตราและวันหยุด', icon: Settings },
 ];
 
 function WorkspaceApp({ user }: { user: User }) {
-  // Selected month defaults to October 2569 (2026-10) to align with the hospital sample month
-  const [selectedMonthId, setSelectedMonthId] = useState<string>(OCTOBER_2569_MONTH_ID);
+  // Always default to the live current calendar month and auto-advance when a new month begins
+  const [currentMonthId, setCurrentMonthId] = useState<string>(() => getCurrentMonthId());
+  const [selectedMonthId, setSelectedMonthId] = useState<string>(() => getCurrentMonthId());
   const [activeView, setActiveView] = useState<ActiveView>('my-shifts');
   const [highlightRosterStaffId, setHighlightRosterStaffId] = useState<string>('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -246,6 +253,37 @@ function WorkspaceApp({ user }: { user: User }) {
     };
   }, [selectedMonthId]);
 
+  // Keep currentMonthId synchronized with real calendar time (rolls over automatically into a new month)
+  useEffect(() => {
+    const syncLiveMonth = () => {
+      const liveId = getCurrentMonthId();
+      setCurrentMonthId((prevLiveId) => {
+        if (prevLiveId !== liveId) {
+          setSelectedMonthId((prevSelected) =>
+            prevSelected === prevLiveId ? liveId : prevSelected,
+          );
+          return liveId;
+        }
+        return prevLiveId;
+      });
+    };
+
+    const intervalId = window.setInterval(syncLiveMonth, 60_000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncLiveMonth();
+      }
+    };
+    window.addEventListener('focus', syncLiveMonth);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', syncLiveMonth);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
+
   const effectiveMonth: RosterMonth = useMemo(() => {
     if (rosterMonth && rosterMonth.monthId === selectedMonthId) {
       return rosterMonth;
@@ -256,6 +294,7 @@ function WorkspaceApp({ user }: { user: User }) {
       yearAD,
       monthNumber,
       holidays: getDefaultHolidaysForMonth(yearAD, monthNumber),
+      publicHolidays: getDefaultPublicHolidaysForMonth(yearAD, monthNumber),
       payDateLabel: getDefaultPayDateLabel(yearAD, monthNumber),
       status: 'open',
       visibility: 'department',
@@ -320,7 +359,8 @@ function WorkspaceApp({ user }: { user: User }) {
     activeView === 'roster' ||
     activeView === 'workload-roster' ||
     activeView === 'smc-roster' ||
-    activeView === 'reimbursement';
+    activeView === 'reimbursement' ||
+    activeView === 'dashboard';
 
   const handleOpenPrintA4 = (customTitle?: string, orientation: A4Orientation = 'landscape') => {
     const monthLabel = getThaiMonthYearLabel(effectiveMonth.yearAD, effectiveMonth.monthNumber);
@@ -330,6 +370,7 @@ function WorkspaceApp({ user }: { user: User }) {
       'workload-roster': `ตารางปฏิบัติงานเวร Workload ประจำเดือน ${monthLabel}`,
       'smc-roster': `ตารางปฏิบัติงานเวร SMC ประจำเดือน ${monthLabel}`,
       reimbursement: `หลักฐานการเบิกจ่ายเงินตอบแทน OT ประจำเดือน ${monthLabel}`,
+      dashboard: `แดชบอร์ดยอด OT อัตรากำลัง และ Productivity งานวิสัญญี ${monthLabel}`,
       staff: `รายชื่อบุคลากร ${settings.departmentName}`,
       settings: `ตั้งค่าอัตราและวันหยุด ${monthLabel}`,
     };
@@ -632,6 +673,16 @@ function WorkspaceApp({ user }: { user: User }) {
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
+              {selectedMonthId !== currentMonthId && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedMonthId(currentMonthId)}
+                  className="px-2 py-1 text-[11px] font-semibold text-teal-800 bg-white hover:bg-teal-50 border border-teal-200 rounded-md transition-colors whitespace-nowrap cursor-pointer"
+                  title="กลับไปยังเดือนปัจจุบัน"
+                >
+                  เดือนนี้
+                </button>
+              )}
             </div>
           </div>
         </header>
@@ -700,6 +751,16 @@ function WorkspaceApp({ user }: { user: User }) {
                   month={effectiveMonth}
                   settings={settings}
                   summaries={summaries}
+                  onPrintA4={(title) => handleOpenPrintA4(title)}
+                />
+              )}
+
+              {activeView === 'dashboard' && (
+                <DashboardView
+                  month={effectiveMonth}
+                  settings={settings}
+                  summaries={summaries}
+                  onEditStaffShifts={handleEditStaffFromRoster}
                   onPrintA4={(title) => handleOpenPrintA4(title)}
                 />
               )}

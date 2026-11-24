@@ -60,9 +60,17 @@ export function formatMonthId(yearAD: number, monthNumber: number): string {
   return `${yearAD}-${String(monthNumber).padStart(2, '0')}`;
 }
 
+export function getCurrentMonthId(referenceDate: Date = new Date()): string {
+  return formatMonthId(referenceDate.getFullYear(), referenceDate.getMonth() + 1);
+}
+
 export function parseMonthId(monthId: string): { yearAD: number; monthNumber: number } {
+  const now = new Date();
   const [y, m] = monthId.split('-').map(Number);
-  return { yearAD: y || 2026, monthNumber: m || 10 };
+  return {
+    yearAD: y || now.getFullYear(),
+    monthNumber: m || now.getMonth() + 1,
+  };
 }
 
 export function getBuddhistYear(yearAD: number): number {
@@ -79,6 +87,18 @@ export function getDefaultPayDateLabel(yearAD: number, monthNumber: number): str
   const nextYearAD = monthNumber === 12 ? yearAD + 1 : yearAD;
   const shortBE = String(getBuddhistYear(nextYearAD)).slice(-2);
   return `${THAI_MONTHS_SHORT[nextMonth - 1]}-${shortBE}`;
+}
+
+export function getDefaultPublicHolidaysForMonth(yearAD: number, monthNumber: number): number[] {
+  const daysCount = getDaysInMonth(yearAD, monthNumber);
+  const publicHolidays: number[] = [];
+  for (let d = 1; d <= daysCount; d++) {
+    const fixedKey = `${monthNumber}-${d}`;
+    if (Boolean(FIXED_THAI_HOLIDAYS[fixedKey])) {
+      publicHolidays.push(d);
+    }
+  }
+  return publicHolidays;
 }
 
 export function getDefaultHolidaysForMonth(yearAD: number, monthNumber: number): number[] {
