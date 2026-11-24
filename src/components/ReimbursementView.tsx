@@ -260,12 +260,12 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
 
       {/* TAB 1: Official Regular OT + Standby Reimbursement Table (Black text throughout, except Standby in Sky Blue) */}
       {activeTab === 'ot' && (
-        <div className="print-full-width bg-white border border-slate-300 rounded-xl p-5 lg:p-7 overflow-hidden text-black">
+        <div className="print-full-width thai-sarabun-doc bg-white border border-slate-300 rounded-xl p-5 lg:p-7 overflow-hidden text-black">
           <div className="text-center space-y-0.5 mb-4 text-black">
-            <h2 className="text-base font-bold text-black">
+            <h2 className="doc-title text-base lg:text-lg leading-snug font-bold text-black">
               หลักฐานการจ่ายเงินตอบแทนการปฏิบัติงานนอกเวลาราชการ
             </h2>
-            <p className="text-sm font-semibold text-black">
+            <p className="doc-subtitle text-sm font-semibold text-black">
               ชื่อส่วนราชการ {settings.hospitalName} ประจำเดือน {monthLabel}
             </p>
           </div>
@@ -276,7 +276,7 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse border border-slate-800 text-[12px] text-black">
+              <table className="doc-table w-full border-collapse border border-slate-800 text-[13px] leading-snug text-black">
                 <thead>
                   <tr className="bg-slate-50 text-black font-semibold text-center">
                     <th className="border border-slate-700 px-1.5 py-2 w-10">ลำดับ</th>
@@ -309,18 +309,18 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                     const personRowCount = 4 + pubShiftRows.length;
                     const braceHeightClass =
                       personRowCount >= 7
-                        ? 'h-36'
+                        ? 'doc-brace-7'
                         : personRowCount === 6
-                        ? 'h-32'
+                        ? 'doc-brace-6'
                         : personRowCount === 5
-                        ? 'h-28'
-                        : 'h-24';
+                        ? 'doc-brace-5'
+                        : 'doc-brace-4';
 
                     return (
                       <React.Fragment key={s.staff.staffId}>
                         {/* Row 1: ช */}
                         <tr className="text-black">
-                          <td className="border border-slate-600 px-1.5 py-1 text-center font-mono tabular-nums font-semibold">
+                          <td className="border border-slate-600 px-1.5 py-1 text-center tabular-nums font-semibold">
                             {idx + 1}
                           </td>
                           <td className="border border-slate-600 px-2.5 py-1 font-medium text-black whitespace-nowrap">
@@ -329,27 +329,27 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                           <td className="border border-slate-600 px-2 py-1 text-black whitespace-nowrap">
                             {CATEGORY_LABELS[s.staff.category]}
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums">
+                          <td className="border border-slate-600 px-2 py-1 text-center tabular-nums">
                             {formatCurrency(s.otRate)}
                           </td>
                           <td className="border border-slate-600 border-r-0 px-2 py-1 text-center font-semibold text-black w-8">
                             ช
                           </td>
-                          <td className="border border-slate-600 border-l-0 px-2 py-1 font-mono text-[11px] tabular-nums text-black">
+                          <td className="border border-slate-600 border-l-0 px-2 py-1 tabular-nums text-black">
                             {formatDayList(
                               s.hasDistinctPublicHolidayRate ? s.regularOtMorningDays : s.otMorningDays,
                             )}
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums">
+                          <td className="border border-slate-600 px-2 py-1 text-center tabular-nums">
                             {(s.hasDistinctPublicHolidayRate ? s.regularOtMorningDays : s.otMorningDays).length}
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-right font-mono tabular-nums">
+                          <td className="border border-slate-600 px-2 py-1 text-right tabular-nums">
                             {formatCurrency(s.otMorningAmount)}
                           </td>
                           <td className="border border-slate-600 px-1.5 py-1 text-center text-black">
                             -
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-right font-mono tabular-nums">
+                          <td className="border border-slate-600 px-2 py-1 text-right tabular-nums">
                             {formatCurrency(s.otMorningAmount)}
                           </td>
                           <td className="border border-slate-600 px-2 py-1 text-center whitespace-nowrap">
@@ -383,7 +383,7 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                           {/* หมายเหตุ (ยอดรวมรายบุคคล) */}
                           <td
                             rowSpan={personRowCount}
-                            className="border border-slate-600 border-b-2 border-b-slate-800 px-2 py-1 align-middle text-right font-mono font-bold tabular-nums text-black whitespace-nowrap"
+                            className="border border-slate-600 border-b-2 border-b-slate-800 px-2 py-1 align-middle text-right font-bold tabular-nums text-black whitespace-nowrap"
                           >
                             {formatCurrency(s.regularOtTotal)}
                           </td>
@@ -394,27 +394,27 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                           <td className="border border-slate-600" />
                           <td className="border border-slate-600" />
                           <td className="border border-slate-600" />
-                          <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums">
+                          <td className="border border-slate-600 px-2 py-1 text-center tabular-nums">
                             {formatCurrency(s.otRate)}
                           </td>
                           <td className="border border-slate-600 border-r-0 px-2 py-1 text-center font-semibold text-black">
                             บ
                           </td>
-                          <td className="border border-slate-600 border-l-0 px-2 py-1 font-mono text-[11px] tabular-nums text-black">
+                          <td className="border border-slate-600 border-l-0 px-2 py-1 tabular-nums text-black">
                             {formatDayList(
                               s.hasDistinctPublicHolidayRate ? s.regularOtAfternoonDays : s.otAfternoonDays,
                             )}
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums">
+                          <td className="border border-slate-600 px-2 py-1 text-center tabular-nums">
                             {(s.hasDistinctPublicHolidayRate ? s.regularOtAfternoonDays : s.otAfternoonDays).length}
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-right font-mono tabular-nums">
+                          <td className="border border-slate-600 px-2 py-1 text-right tabular-nums">
                             {formatCurrency(s.otAfternoonAmount)}
                           </td>
                           <td className="border border-slate-600 px-1.5 py-1 text-center text-black">
                             -
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-right font-mono tabular-nums">
+                          <td className="border border-slate-600 px-2 py-1 text-right tabular-nums">
                             {formatCurrency(s.otAfternoonAmount)}
                           </td>
                           <td className="border border-slate-600 px-2 py-1 text-center">&quot;</td>
@@ -425,27 +425,27 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                           <td className="border border-slate-600" />
                           <td className="border border-slate-600" />
                           <td className="border border-slate-600" />
-                          <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums">
+                          <td className="border border-slate-600 px-2 py-1 text-center tabular-nums">
                             {formatCurrency(s.otRate)}
                           </td>
                           <td className="border border-slate-600 border-r-0 px-2 py-1 text-center font-semibold text-black">
                             ด
                           </td>
-                          <td className="border border-slate-600 border-l-0 px-2 py-1 font-mono text-[11px] tabular-nums text-black">
+                          <td className="border border-slate-600 border-l-0 px-2 py-1 tabular-nums text-black">
                             {formatDayList(
                               s.hasDistinctPublicHolidayRate ? s.regularOtNightDays : s.otNightDays,
                             )}
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums">
+                          <td className="border border-slate-600 px-2 py-1 text-center tabular-nums">
                             {(s.hasDistinctPublicHolidayRate ? s.regularOtNightDays : s.otNightDays).length}
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-right font-mono tabular-nums">
+                          <td className="border border-slate-600 px-2 py-1 text-right tabular-nums">
                             {formatCurrency(s.otNightAmount)}
                           </td>
                           <td className="border border-slate-600 px-1.5 py-1 text-center text-black">
                             -
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-right font-mono tabular-nums">
+                          <td className="border border-slate-600 px-2 py-1 text-right tabular-nums">
                             {formatCurrency(s.otNightAmount)}
                           </td>
                           <td className="border border-slate-600 px-2 py-1 text-center">&quot;</td>
@@ -460,25 +460,25 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                           >
                             เวรดึก Standby
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums text-sky-600">
+                          <td className="border border-slate-600 px-2 py-1 text-center tabular-nums text-sky-600">
                             {formatCurrency(s.standbyRate)}
                           </td>
                           <td className="border border-slate-600 border-r-0 px-2 py-1 text-center font-semibold text-sky-600">
                             ด
                           </td>
-                          <td className="border border-slate-600 border-l-0 px-2 py-1 font-mono text-[11px] tabular-nums text-sky-600">
+                          <td className="border border-slate-600 border-l-0 px-2 py-1 tabular-nums text-sky-600">
                             {formatDayList(s.standbyDays)}
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums text-sky-600">
+                          <td className="border border-slate-600 px-2 py-1 text-center tabular-nums text-sky-600">
                             {s.standbyDays.length}
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-right font-mono tabular-nums text-sky-600">
+                          <td className="border border-slate-600 px-2 py-1 text-right tabular-nums text-sky-600">
                             {formatCurrency(s.standbyAmount)}
                           </td>
                           <td className="border border-slate-600 px-1.5 py-1 text-center text-sky-600">
                             -
                           </td>
-                          <td className="border border-slate-600 px-2 py-1 text-right font-mono tabular-nums text-sky-600">
+                          <td className="border border-slate-600 px-2 py-1 text-right tabular-nums text-sky-600">
                             {formatCurrency(s.standbyAmount)}
                           </td>
                           <td className="border border-slate-600 px-2 py-1 text-center text-sky-600">&quot;</td>
@@ -502,25 +502,25 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                               >
                                 {pIdx === 0 ? specialRateLabel : ''}
                               </td>
-                              <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums text-black">
+                              <td className="border border-slate-600 px-2 py-1 text-center tabular-nums text-black">
                                 {formatCurrency(s.publicHolidayOtRate)}
                               </td>
                               <td className="border border-slate-600 border-r-0 px-2 py-1 text-center font-semibold text-black">
                                 {item.code}
                               </td>
-                              <td className="border border-slate-600 border-l-0 px-2 py-1 font-mono text-[11px] tabular-nums text-black">
+                              <td className="border border-slate-600 border-l-0 px-2 py-1 tabular-nums text-black">
                                 {formatDayList(item.days)}
                               </td>
-                              <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums text-black">
+                              <td className="border border-slate-600 px-2 py-1 text-center tabular-nums text-black">
                                 {item.days.length}
                               </td>
-                              <td className="border border-slate-600 px-2 py-1 text-right font-mono tabular-nums text-black">
+                              <td className="border border-slate-600 px-2 py-1 text-right tabular-nums text-black">
                                 {formatCurrency(rowAmount)}
                               </td>
                               <td className="border border-slate-600 px-1.5 py-1 text-center text-black">
                                 -
                               </td>
-                              <td className="border border-slate-600 px-2 py-1 text-right font-mono tabular-nums text-black">
+                              <td className="border border-slate-600 px-2 py-1 text-right tabular-nums text-black">
                                 {formatCurrency(rowAmount)}
                               </td>
                               <td className="border border-slate-600 px-2 py-1 text-center text-black">&quot;</td>
@@ -536,14 +536,14 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                     <td colSpan={7} className="border border-slate-700 px-3 py-2 text-right">
                       รวมทั้งสิ้น
                     </td>
-                    <td className="border border-slate-700 px-2 py-2 text-right font-mono tabular-nums">
+                    <td className="border border-slate-700 px-2 py-2 text-right tabular-nums">
                       {formatCurrency(grandRegularOt)}
                     </td>
                     <td className="border border-slate-700 px-1.5 py-2 text-center">-</td>
-                    <td className="border border-slate-700 px-2 py-2 text-right font-mono tabular-nums">
+                    <td className="border border-slate-700 px-2 py-2 text-right tabular-nums">
                       {formatCurrency(grandRegularOt)}
                     </td>
-                    <td colSpan={3} className="border border-slate-700 px-2 py-2 text-right font-mono tabular-nums">
+                    <td colSpan={3} className="border border-slate-700 px-2 py-2 text-right tabular-nums">
                       {formatCurrency(grandRegularOt)}
                     </td>
                   </tr>
@@ -553,7 +553,7 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
           )}
 
           {/* Thai Baht Text + Official 3-Column Signature Block */}
-          <div className="print-avoid-break mt-4 space-y-6 text-xs text-black">
+          <div className="doc-signature print-avoid-break mt-4 space-y-6 text-[13px] text-black">
             <div className="flex flex-wrap items-center gap-6 px-2">
               <span className="font-semibold">รวมทั้งสิ้น (ตัวอักษร)</span>
               <span className="font-bold text-sm">{numberToThaiBahtText(grandRegularOt)}</span>
@@ -585,15 +585,15 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
 
       {/* TAB 2: Workload Shift Log (ช*, บ*, ด* — Green, Dates & Count Only, No Money) */}
       {activeTab === 'workload' && (
-        <div className="print-full-width bg-white border border-slate-300 rounded-xl p-5 lg:p-7 overflow-hidden">
+        <div className="print-full-width thai-sarabun-doc bg-white border border-slate-300 rounded-xl p-5 lg:p-7 overflow-hidden">
           <div className="text-center space-y-0.5 mb-4">
-            <h2 className="text-base font-bold text-slate-950">
+            <h2 className="doc-title text-base lg:text-lg leading-snug font-bold text-slate-950">
               สรุปวันที่ปฏิบัติงานเวร Workload (ช*, บ*, ด*) — ไม่คิดเงินในตาราง OT
             </h2>
-            <p className="text-sm font-semibold text-slate-900">
+            <p className="doc-subtitle text-sm font-semibold text-slate-900">
               {settings.departmentName} · {settings.hospitalName} ประจำเดือน {monthLabel}
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="doc-subtitle text-xs text-slate-600">
               แสดงเฉพาะวันที่และจำนวนเวรสีเขียวเพื่อใช้อ้างอิงลงตารางเบิกแยกต่างหาก
             </p>
           </div>
@@ -604,7 +604,7 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse border border-slate-800 text-[12px]">
+              <table className="doc-table w-full border-collapse border border-slate-800 text-[13px] leading-snug">
                 <thead>
                   <tr className="bg-slate-50 text-slate-950 font-semibold text-center">
                     <th className="border border-slate-700 px-1.5 py-2 w-10">ลำดับ</th>
@@ -626,7 +626,7 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                     <React.Fragment key={s.staff.staffId}>
                       {/* Row 1: ช* */}
                       <tr>
-                        <td className="border border-slate-600 px-1.5 py-1 text-center font-mono tabular-nums font-semibold">
+                        <td className="border border-slate-600 px-1.5 py-1 text-center tabular-nums font-semibold">
                           {idx + 1}
                         </td>
                         <td className="border border-slate-600 px-2.5 py-1 font-medium text-slate-950 whitespace-nowrap">
@@ -638,14 +638,14 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                         <td className="border border-slate-600 border-r-0 px-2 py-1 text-center font-semibold text-green-700 w-10">
                           ช*
                         </td>
-                        <td className="border border-slate-600 border-l-0 px-2 py-1 font-mono text-[11px] tabular-nums text-slate-900">
+                        <td className="border border-slate-600 border-l-0 px-2 py-1 tabular-nums text-slate-900">
                           {formatDayList(s.workloadMorningDays) || '-'}
                         </td>
-                        <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums">
+                        <td className="border border-slate-600 px-2 py-1 text-center tabular-nums">
                           {s.workloadMorningDays.length}
                         </td>
                         <td className="border border-slate-600 px-2 py-1" />
-                        <td className="border border-slate-600 px-2 py-1 text-xs text-slate-500 text-center">
+                        <td className="border border-slate-600 px-2 py-1 text-slate-600 text-center">
                           เบิกแยกตาราง
                         </td>
                       </tr>
@@ -658,10 +658,10 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                         <td className="border border-slate-600 border-r-0 px-2 py-1 text-center font-semibold text-green-700">
                           บ*
                         </td>
-                        <td className="border border-slate-600 border-l-0 px-2 py-1 font-mono text-[11px] tabular-nums text-slate-900">
+                        <td className="border border-slate-600 border-l-0 px-2 py-1 tabular-nums text-slate-900">
                           {formatDayList(s.workloadAfternoonDays) || '-'}
                         </td>
-                        <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums">
+                        <td className="border border-slate-600 px-2 py-1 text-center tabular-nums">
                           {s.workloadAfternoonDays.length}
                         </td>
                         <td className="border border-slate-600 px-2 py-1" />
@@ -676,16 +676,16 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                         <td className="border border-slate-600 border-r-0 px-2 py-1 text-center font-semibold text-green-700">
                           ด*
                         </td>
-                        <td className="border border-slate-600 border-l-0 px-2 py-1 font-mono text-[11px] tabular-nums text-slate-900">
+                        <td className="border border-slate-600 border-l-0 px-2 py-1 tabular-nums text-slate-900">
                           {formatDayList(s.workloadNightDays) || '-'}
                         </td>
-                        <td className="border border-slate-600 px-2 py-1 text-center font-mono tabular-nums">
+                        <td className="border border-slate-600 px-2 py-1 text-center tabular-nums">
                           {s.workloadNightDays.length}
                         </td>
-                        <td className="border border-slate-600 px-2 py-1 text-center font-mono font-bold tabular-nums text-green-800 bg-green-50/40">
+                        <td className="border border-slate-600 px-2 py-1 text-center font-bold tabular-nums text-green-800 bg-green-50/40">
                           {s.workloadCount} เวร
                         </td>
-                        <td className="border border-slate-600 px-2 py-1 text-xs text-slate-500 text-center">
+                        <td className="border border-slate-600 px-2 py-1 text-slate-600 text-center">
                           ไม่รวมคิดเงิน OT
                         </td>
                       </tr>
@@ -696,13 +696,13 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                     <td colSpan={5} className="border border-slate-700 px-3 py-2 text-right">
                       รวมจำนวนเวร Workload ทั้งสิ้น
                     </td>
-                    <td className="border border-slate-700 px-2 py-2 text-center font-mono tabular-nums">
+                    <td className="border border-slate-700 px-2 py-2 text-center tabular-nums">
                       {totalWorkloadShifts}
                     </td>
-                    <td className="border border-slate-700 px-2 py-2 text-center font-mono tabular-nums text-green-800">
+                    <td className="border border-slate-700 px-2 py-2 text-center tabular-nums text-green-800">
                       {totalWorkloadShifts} เวร
                     </td>
-                    <td className="border border-slate-700 px-2 py-2 text-center text-xs font-normal text-slate-600">
+                    <td className="border border-slate-700 px-2 py-2 text-center font-normal text-slate-700">
                       ไม่คิดเงิน (เบิกแยกตาราง)
                     </td>
                   </tr>
@@ -715,30 +715,30 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
 
       {/* TAB 3: Individual Summary Table (OT + Public Holiday + Standby; Workload Count Only) */}
       {activeTab === 'individual' && (
-        <div className="print-full-width bg-white border border-slate-200 rounded-xl overflow-hidden">
+        <div className="print-full-width thai-sarabun-doc bg-white border border-slate-200 rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-bold text-slate-900">
+              <h2 className="doc-title text-base lg:text-lg leading-snug font-bold text-slate-900">
                 สรุปยอดเบิกค่าเวรรายบุคคล (OT ปกติ + Standby + {specialRateLabel} · ไม่คิดเงินเวร Workload)
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="doc-subtitle text-xs text-slate-600">
                 {settings.departmentName} · ประจำเดือน {monthLabel}
               </p>
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
+            <table className="doc-table w-full text-[13px] leading-snug border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-700">
-                  <th className="px-3 py-3 text-center w-12">ลำดับ</th>
-                  <th className="px-4 py-3 text-left">ชื่อ - สกุล</th>
-                  <th className="px-3 py-3 text-left">ตำแหน่ง</th>
-                  <th className="px-3 py-3 text-right">วันทำการ</th>
-                  <th className="px-3 py-3 text-right text-red-600">OT ปกติ (ช/บ/ด)</th>
-                  <th className="px-3 py-3 text-right text-sky-600">Standby</th>
-                  <th className="px-3 py-3 text-right text-fuchsia-600">{specialRateLabel}</th>
-                  <th className="px-3 py-3 text-right text-green-700">Workload (ไม่คิดเงิน)</th>
-                  <th className="px-4 py-3 text-right text-teal-800">รวมเบิก OT สุทธิ (บาท)</th>
+                <tr className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-700">
+                  <th className="px-3 py-2.5 text-center w-12">ลำดับ</th>
+                  <th className="px-4 py-2.5 text-left">ชื่อ - สกุล</th>
+                  <th className="px-3 py-2.5 text-left">ตำแหน่ง</th>
+                  <th className="px-3 py-2.5 text-right">วันทำการ</th>
+                  <th className="px-3 py-2.5 text-right text-red-600">OT ปกติ (ช/บ/ด)</th>
+                  <th className="px-3 py-2.5 text-right text-sky-600">Standby</th>
+                  <th className="px-3 py-2.5 text-right text-fuchsia-600">{specialRateLabel}</th>
+                  <th className="px-3 py-2.5 text-right text-green-700">Workload (ไม่คิดเงิน)</th>
+                  <th className="px-4 py-2.5 text-right text-teal-800">รวมเบิก OT สุทธิ (บาท)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -754,40 +754,40 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                     s.otMorningAmount + s.otAfternoonAmount + s.otNightAmount;
                   return (
                     <tr key={s.staff.staffId} className="hover:bg-slate-50/70">
-                      <td className="px-3 py-2.5 text-center font-mono text-xs tabular-nums text-slate-500">
+                      <td className="px-3 py-2 text-center tabular-nums text-slate-600">
                         {idx + 1}
                       </td>
-                      <td className="px-4 py-2.5 font-medium text-slate-900 whitespace-nowrap">
+                      <td className="px-4 py-2 font-medium text-slate-900 whitespace-nowrap">
                         {s.staff.fullName}
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-slate-600 whitespace-nowrap">
+                      <td className="px-3 py-2 text-slate-700 whitespace-nowrap">
                         {CATEGORY_LABELS[s.staff.category]}
                       </td>
-                      <td className="px-3 py-2.5 text-right font-mono text-xs tabular-nums text-slate-700">
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">
                         {s.workingDaysCount}
                       </td>
-                      <td className="px-3 py-2.5 text-right font-mono text-xs tabular-nums text-red-600">
+                      <td className="px-3 py-2 text-right tabular-nums text-red-600">
                         {formatCurrency(regularOnlyBaht)}{' '}
-                        <span className="text-slate-400">({regularOnlyCount})</span>
+                        <span className="text-slate-500">({regularOnlyCount})</span>
                       </td>
-                      <td className="px-3 py-2.5 text-right font-mono text-xs tabular-nums text-sky-600">
+                      <td className="px-3 py-2 text-right tabular-nums text-sky-600">
                         {formatCurrency(s.standbyAmount)}{' '}
-                        <span className="text-slate-400">({s.standbyCount})</span>
+                        <span className="text-slate-500">({s.standbyCount})</span>
                       </td>
-                      <td className="px-3 py-2.5 text-right font-mono text-xs tabular-nums text-fuchsia-700">
+                      <td className="px-3 py-2 text-right tabular-nums text-fuchsia-700">
                         {s.publicHolidayOtCount > 0 ? (
                           <>
                             {formatCurrency(s.publicHolidayOtAmount)}{' '}
-                            <span className="text-fuchsia-400">({s.publicHolidayOtCount})</span>
+                            <span className="text-fuchsia-500">({s.publicHolidayOtCount})</span>
                           </>
                         ) : (
                           '-'
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-right font-mono text-xs font-medium tabular-nums text-green-700">
+                      <td className="px-3 py-2 text-right font-medium tabular-nums text-green-700">
                         {s.workloadCount > 0 ? `${s.workloadCount} เวร` : '-'}
                       </td>
-                      <td className="px-4 py-2.5 text-right font-mono font-bold tabular-nums text-teal-800">
+                      <td className="px-4 py-2 text-right font-bold tabular-nums text-teal-800">
                         {formatCurrency(s.regularOtTotal)}
                       </td>
                     </tr>
@@ -796,21 +796,21 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
               </tbody>
               <tfoot>
                 <tr className="bg-slate-100 border-t-2 border-slate-300 font-bold text-slate-950">
-                  <td colSpan={6} className="px-4 py-3 text-right text-xs">
+                  <td colSpan={6} className="px-4 py-2.5 text-right">
                     รวมทั้งหมด ({baseFiltered.length} คน) ·{' '}
                     {numberToThaiBahtText(
                       baseFiltered.reduce((acc, s) => acc + s.regularOtTotal, 0),
                     )}
                   </td>
-                  <td className="px-3 py-3 text-right font-mono text-xs tabular-nums text-fuchsia-800">
+                  <td className="px-3 py-2.5 text-right tabular-nums text-fuchsia-800">
                     {formatCurrency(
                       baseFiltered.reduce((acc, s) => acc + s.publicHolidayOtAmount, 0),
                     )}
                   </td>
-                  <td className="px-3 py-3 text-right font-mono text-xs tabular-nums text-green-800">
+                  <td className="px-3 py-2.5 text-right tabular-nums text-green-800">
                     {baseFiltered.reduce((acc, s) => acc + s.workloadCount, 0)} เวร
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-sm tabular-nums text-teal-900">
+                  <td className="px-4 py-2.5 text-right tabular-nums text-teal-900">
                     {formatCurrency(
                       baseFiltered.reduce((acc, s) => acc + s.regularOtTotal, 0),
                     )}

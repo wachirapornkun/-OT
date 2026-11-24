@@ -22,6 +22,7 @@ interface ShiftCellDisplayProps {
   isHoliday: boolean;
   isWeekend?: boolean;
   compact?: boolean;
+  docMode?: boolean;
 }
 
 /**
@@ -39,12 +40,17 @@ export const ShiftCellDisplay: React.FC<ShiftCellDisplayProps> = ({
   isHoliday,
   isWeekend = false,
   compact = false,
+  docMode = false,
 }) => {
   if (!value) {
     return <span className="text-slate-300 select-none">&nbsp;</span>;
   }
 
-  const sizeClass = compact ? 'text-[11px] leading-none' : 'text-[13px] leading-none';
+  const sizeClass = docMode
+    ? 'text-[12px] leading-tight'
+    : compact
+    ? 'text-[11px] leading-none'
+    : 'text-[13px] leading-none';
 
   if (rowKey === 'mainShifts') {
     if (value === '0') {
@@ -108,7 +114,9 @@ export const ShiftCellDisplay: React.FC<ShiftCellDisplayProps> = ({
   }
 
   if (rowKey === 'smcShifts') {
-    const smcSizeClass = compact
+    const smcSizeClass = docMode
+      ? 'text-[10px] leading-tight tracking-tight'
+      : compact
       ? 'text-[9px] leading-none tracking-tight'
       : 'text-[11px] leading-none tracking-tight';
     return (

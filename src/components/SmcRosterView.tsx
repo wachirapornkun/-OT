@@ -300,23 +300,23 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
       </div>
 
       {/* Official SMC Roster Sheet */}
-      <div className="print-full-width bg-white border border-slate-300 rounded-xl p-5 lg:p-6 overflow-hidden">
-        {/* Official Header (Mirrors Workload & Part 1) */}
+      <div className="print-full-width thai-sarabun-doc bg-white border border-slate-300 rounded-xl p-5 lg:p-6 overflow-hidden">
+        {/* Official Header */}
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-start gap-3 mb-4">
           <div className="hidden sm:block" />
           <div className="text-center space-y-0.5">
-            <h2 className="text-base lg:text-lg font-bold text-slate-950">
+            <h2 className="doc-title text-base lg:text-lg leading-snug font-bold text-slate-950">
               ตารางปฏิบัติงานเวร SMC ประจำเดือน {monthLabel}
             </h2>
-            <p className="text-sm font-semibold text-slate-900">
+            <p className="doc-subtitle text-sm font-semibold text-slate-900">
               ชื่อหน่วยงาน {settings.departmentName}
             </p>
-            <p className="text-xs text-slate-600">{settings.hospitalName}</p>
+            <p className="doc-subtitle text-xs text-slate-600">{settings.hospitalName}</p>
           </div>
-          <div className="flex flex-col items-end text-right text-xs font-semibold text-slate-900 tabular-nums space-y-0.5">
+          <div className="doc-meta flex flex-col items-end text-right text-xs font-semibold text-slate-900 tabular-nums space-y-0.5">
             <div>วันทำการ {workingDaysTotal} วัน</div>
             <div>วันหยุด {month.holidays.length} วัน</div>
-            <div className="pt-1 w-full max-w-[280px]">
+            <div className="pt-1 w-full max-w-[260px]">
               <input
                 type="text"
                 maxLength={120}
@@ -325,7 +325,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                 onBlur={handleHeaderNoteBlur}
                 placeholder="ใส่ข้อความ (ขนาด 16 pt)..."
                 aria-label="ข้อความมุมขวาบนใต้จำนวนวันหยุด"
-                className="w-full text-right text-[16pt] leading-tight font-bold text-slate-950 bg-slate-50/80 hover:bg-slate-100/80 focus:bg-white border border-dashed border-slate-300 focus:border-purple-500 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-purple-500/30 placeholder:text-xs placeholder:font-normal placeholder:text-slate-400 print:border-transparent print:bg-transparent print:px-0 print:placeholder:text-transparent"
+                className="doc-corner-note w-full text-right text-base leading-tight font-bold text-slate-950 bg-slate-50/80 hover:bg-slate-100/80 focus:bg-white border border-dashed border-slate-300 focus:border-purple-500 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-purple-500/30 placeholder:text-xs placeholder:font-normal placeholder:text-slate-400 print:border-transparent print:bg-transparent print:px-0 print:placeholder:text-transparent"
               />
             </div>
           </div>
@@ -338,24 +338,24 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-slate-800 text-center text-[11px]">
+            <table className="doc-table w-full border-collapse border border-slate-800 text-center text-[12px] leading-tight">
               <thead>
                 <tr className="bg-slate-50">
                   <th
                     rowSpan={2}
-                    className="border border-slate-700 px-1.5 py-1 font-semibold text-slate-900 w-8"
+                    className="border border-slate-700 px-1.5 py-1 font-semibold text-slate-900 w-9"
                   >
                     ลำดับ
                   </th>
                   <th
                     rowSpan={2}
-                    className="border border-slate-700 px-2 py-1 font-semibold text-slate-900 text-left min-w-[148px]"
+                    className="border border-slate-700 px-2 py-1 font-semibold text-slate-900 text-left min-w-[155px]"
                   >
                     ชื่อ - สกุล
                   </th>
                   <th
                     rowSpan={2}
-                    className="border border-slate-700 px-2 py-1 font-semibold text-slate-900 min-w-[96px]"
+                    className="border border-slate-700 px-2 py-1 font-semibold text-slate-900 min-w-[100px]"
                   >
                     ตำแหน่ง
                   </th>
@@ -377,7 +377,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                         key={d}
                         onClick={() => handleToggleHoliday(d)}
                         title={`คลิกเพื่อสลับวันที่ ${d} เป็นวันหยุด / วันทำการ`}
-                        className={`border border-slate-700 px-0.5 py-1 font-mono font-bold tabular-nums min-w-[26px] cursor-pointer hover:opacity-85 ${
+                        className={`border border-slate-700 px-0.5 py-1 font-bold tabular-nums min-w-[28px] cursor-pointer hover:opacity-85 ${
                           isHol ? 'bg-red-800 text-white' : 'bg-white text-slate-900'
                         }`}
                       >
@@ -385,7 +385,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                       </th>
                     );
                   })}
-                  <th className="border border-slate-700 px-1.5 py-1 bg-slate-50 font-semibold text-purple-800 w-12">
+                  <th className="border border-slate-700 px-1.5 py-1 bg-slate-50 font-semibold text-purple-800 whitespace-nowrap">
                     รวม
                   </th>
                 </tr>
@@ -405,7 +405,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                           : 'bg-white hover:bg-slate-50/40'
                       }
                     >
-                      <td className="border border-slate-600 px-1 py-1.5 font-mono tabular-nums font-semibold">
+                      <td className="border border-slate-600 px-1 py-1.5 tabular-nums font-semibold">
                         {idx + 1}
                       </td>
                       <td
@@ -419,7 +419,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                               {s.staff.fullName}
                             </div>
                             {s.staff.positionSubLabel && (
-                              <div className="text-[10px] text-slate-600 leading-tight mt-0.5">
+                              <div className="text-[11px] text-slate-600 leading-tight mt-0.5">
                                 {s.staff.positionSubLabel}
                               </div>
                             )}
@@ -429,7 +429,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                               type="button"
                               onClick={() => onEditStaffShifts(s.staff.staffId)}
                               title="กลับไปแก้ไขเวรของบุคคลนี้"
-                              className="no-print inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 hover:bg-purple-100 rounded transition-colors cursor-pointer shrink-0"
+                              className="no-print inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium text-purple-700 hover:bg-purple-100 rounded transition-colors cursor-pointer shrink-0"
                             >
                               <Pencil className="w-2.5 h-2.5" />
                               ลงเวร
@@ -439,7 +439,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                       </td>
                       <td className="border border-slate-600 px-1.5 py-1.5 font-medium text-slate-900 whitespace-nowrap">
                         <div>{s.staff.positionLabel}</div>
-                        <div className="text-[10px] font-semibold text-purple-700">SMC</div>
+                        <div className="text-[11px] font-semibold text-purple-700">SMC</div>
                       </td>
                       {daysArray.map((d) => {
                         const isHol = holidaySet.has(d);
@@ -465,12 +465,12 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                               rowKey="smcShifts"
                               value={val}
                               isHoliday={isHol}
-                              compact
+                              docMode
                             />
                           </td>
                         );
                       })}
-                      <td className="border border-slate-600 px-1.5 py-1.5 font-mono tabular-nums font-bold text-purple-800 bg-purple-50/40 print:bg-white">
+                      <td className="border border-slate-600 px-1.5 py-1.5 tabular-nums font-bold text-purple-800 bg-purple-50/40 print:bg-white">
                         {s.smcCount > 0 ? s.smcCount : ''}
                       </td>
                     </tr>
@@ -482,7 +482,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                   <td colSpan={3 + daysInMonth} className="border border-slate-700 px-3 py-1.5 text-right">
                     รวมจำนวนเวร SMC ทั้งสิ้น ({filteredSummaries.length} คน)
                   </td>
-                  <td className="border border-slate-700 px-1.5 py-1.5 font-mono tabular-nums text-purple-800">
+                  <td className="border border-slate-700 px-1.5 py-1.5 tabular-nums text-purple-800">
                     {totalSmcShifts}
                   </td>
                 </tr>
@@ -492,7 +492,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
         )}
 
         {/* Official Two-Column Signature Block */}
-        <div className="print-avoid-break mt-8 grid grid-cols-2 gap-8 text-xs text-slate-900 px-4">
+        <div className="doc-signature print-avoid-break mt-8 grid grid-cols-2 gap-8 text-[13px] text-slate-900 px-4">
           <div className="text-center space-y-1">
             <div>ลงชื่อ...................................................ผู้จัดตารางปฏิบัติงาน</div>
             <div className="font-semibold">( {settings.schedulerName} )</div>

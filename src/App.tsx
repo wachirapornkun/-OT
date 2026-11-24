@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   Printer,
+  QrCode,
   Settings,
   Stethoscope,
   User as UserIcon,
@@ -56,6 +57,11 @@ import { ReimbursementView } from './components/ReimbursementView';
 import { StaffDirectoryView } from './components/StaffDirectoryView';
 import { DepartmentSettingsView } from './components/DepartmentSettingsView';
 import { PrintA4Modal } from './components/PrintA4Modal';
+import {
+  copyTextToClipboard,
+  getShareableAppUrl,
+  ShareLinkModal,
+} from './components/ShareLinkModal';
 import { A4Orientation } from './utils/a4Print';
 
 type ActiveView =
@@ -86,6 +92,10 @@ function WorkspaceApp({ user }: { user: User }) {
   const [highlightRosterStaffId, setHighlightRosterStaffId] = useState<string>('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [shareModal, setShareModal] = useState<{ open: boolean; copied: boolean }>({
+    open: false,
+    copied: false,
+  });
   const [signingOut, setSigningOut] = useState(false);
   const [accountDisplayName, setAccountDisplayName] = useState<string>(
     user.displayName || getDisplayUsername(user.email) || 'ผู้ใช้งาน',
@@ -99,6 +109,13 @@ function WorkspaceApp({ user }: { user: User }) {
     title: 'เอกสารตารางเวร A4',
     defaultOrientation: 'landscape',
   });
+
+  const shareUrl = useMemo(() => getShareableAppUrl(), []);
+
+  const handleOpenShareLink = async () => {
+    const copied = await copyTextToClipboard(shareUrl);
+    setShareModal({ open: true, copied });
+  };
 
   const userStaffStorageKey = `${SELECTED_STAFF_STORAGE_KEY}_${user.uid}`;
 
@@ -569,8 +586,19 @@ function WorkspaceApp({ user }: { user: User }) {
             </div>
           </div>
 
-          {/* Right Header Controls: Print A4 + Month Switcher */}
+          {/* Right Header Controls: Share Link + Print A4 + Month Switcher */}
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => void handleOpenShareLink()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              title="คัดลอกลิงก์และสร้าง QR Code ส่งให้เพื่อนในแผนก"
+            >
+              <QrCode className="w-3.5 h-3.5 text-teal-700" />
+              <span className="hidden md:inline">ส่งลิงก์ / QR</span>
+              <span className="hidden sm:inline md:hidden">ลิงก์ / QR</span>
+            </button>
+
             {isPrintableView && !dataLoading && (
               <button
                 type="button"
@@ -708,6 +736,16 @@ function WorkspaceApp({ user }: { user: User }) {
         isOpen={changePasswordOpen}
         user={user}
         onClose={() => setChangePasswordOpen(false)}
+      />
+
+      {/* Share Department Link Modal */}
+      <ShareLinkModal
+        isOpen={shareModal.open}
+        onClose={() => setShareModal({ open: false, copied: false })}
+        departmentName={settings.departmentName}
+        hospitalName={settings.hospitalName}
+        shareUrl={shareUrl}
+        initialCopied={shareModal.copied}
       />
     </div>
   );

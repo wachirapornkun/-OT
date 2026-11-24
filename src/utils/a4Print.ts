@@ -31,8 +31,9 @@ export function getA4PrintableWidthPx(orientation: A4Orientation, marginMm: A4Ma
 }
 
 /**
- * Measures the widest content (such as a 31-day roster table) inside the source element
- * and calculates the optimal zoom percentage (55% - 100%) to fit A4 width with zero clipping.
+ * Measures the widest content (such as a 31-day roster table) under actual A4 print styling
+ * (including 14pt/16pt TH Sarabun print rules inside `.a4-print-root`) and calculates
+ * the optimal zoom percentage (40% - 100%) to fit A4 width with zero clipping.
  */
 export function calculateAutoFitScalePercent(
   sourceEl: HTMLElement | null,
@@ -44,12 +45,35 @@ export function calculateAutoFitScalePercent(
   const printableWidth = getA4PrintableWidthPx(orientation, marginMm) - 8;
   let widestContent = sourceEl.scrollWidth;
 
-  const tables = sourceEl.querySelectorAll('table');
-  tables.forEach((tbl) => {
-    if (tbl.scrollWidth > widestContent) {
-      widestContent = tbl.scrollWidth;
+  // Measure inside a temporary off-screen `.a4-print-root` so 14pt/16pt print CSS is reflected accurately
+  if (typeof document !== 'undefined' && document.body) {
+    const measureHost = document.createElement('div');
+    measureHost.className = 'a4-print-root';
+    measureHost.style.position = 'fixed';
+    measureHost.style.left = '-99999px';
+    measureHost.style.top = '0';
+    measureHost.style.width = `${printableWidth}px`;
+    measureHost.style.visibility = 'hidden';
+    measureHost.style.pointerEvents = 'none';
+    measureHost.innerHTML = preparePrintableCloneHtml(sourceEl);
+    document.body.appendChild(measureHost);
+    try {
+      widestContent = measureHost.scrollWidth;
+      measureHost.querySelectorAll('table').forEach((tbl) => {
+        if (tbl.scrollWidth > widestContent) {
+          widestContent = tbl.scrollWidth;
+        }
+      });
+    } finally {
+      document.body.removeChild(measureHost);
     }
-  });
+  } else {
+    sourceEl.querySelectorAll('table').forEach((tbl) => {
+      if (tbl.scrollWidth > widestContent) {
+        widestContent = tbl.scrollWidth;
+      }
+    });
+  }
 
   if (widestContent <= 0 || widestContent <= printableWidth) {
     return 100;
@@ -57,7 +81,7 @@ export function calculateAutoFitScalePercent(
 
   const ratio = printableWidth / widestContent;
   const percent = Math.floor(ratio * 100);
-  return Math.max(55, Math.min(100, percent));
+  return Math.max(40, Math.min(100, percent));
 }
 
 /**
@@ -230,7 +254,8 @@ export function buildA4PrintDocumentHtml(
         padding: 0 !important;
         background: #ffffff !important;
         color: #000000 !important;
-        font-family: "Sarabun", "IBM Plex Sans Thai", sans-serif !important;
+        font-family: "TH Sarabun New", "TH SarabunPSK", "Sarabun", sans-serif !important;
+        font-size: 14pt;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
       }

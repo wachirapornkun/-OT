@@ -319,23 +319,23 @@ export const WorkloadRosterView: React.FC<WorkloadRosterViewProps> = ({
       </div>
 
       {/* Official Workload Roster Sheet */}
-      <div className="print-full-width bg-white border border-slate-300 rounded-xl p-5 lg:p-6 overflow-hidden">
-        {/* Official Header (Mirrors Part 1) */}
+      <div className="print-full-width thai-sarabun-doc bg-white border border-slate-300 rounded-xl p-5 lg:p-6 overflow-hidden">
+        {/* Official Header */}
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-start gap-3 mb-4">
           <div className="hidden sm:block" />
           <div className="text-center space-y-0.5">
-            <h2 className="text-base lg:text-lg font-bold text-slate-950">
+            <h2 className="doc-title text-base lg:text-lg leading-snug font-bold text-slate-950">
               ตารางปฏิบัติงานเวร Workload ประจำเดือน {monthLabel}
             </h2>
-            <p className="text-sm font-semibold text-slate-900">
+            <p className="doc-subtitle text-sm font-semibold text-slate-900">
               ชื่อหน่วยงาน {settings.departmentName}
             </p>
-            <p className="text-xs text-slate-600">{settings.hospitalName}</p>
+            <p className="doc-subtitle text-xs text-slate-600">{settings.hospitalName}</p>
           </div>
-          <div className="flex flex-col items-end text-right text-xs font-semibold text-slate-900 tabular-nums space-y-0.5">
+          <div className="doc-meta flex flex-col items-end text-right text-xs font-semibold text-slate-900 tabular-nums space-y-0.5">
             <div>วันทำการ {workingDaysTotal} วัน</div>
             <div>วันหยุด {month.holidays.length} วัน</div>
-            <div className="pt-1 w-full max-w-[280px]">
+            <div className="pt-1 w-full max-w-[260px]">
               <input
                 type="text"
                 maxLength={120}
@@ -344,7 +344,7 @@ export const WorkloadRosterView: React.FC<WorkloadRosterViewProps> = ({
                 onBlur={handleHeaderNoteBlur}
                 placeholder="ใส่ข้อความ (ขนาด 16 pt)..."
                 aria-label="ข้อความมุมขวาบนใต้จำนวนวันหยุด"
-                className="w-full text-right text-[16pt] leading-tight font-bold text-slate-950 bg-slate-50/80 hover:bg-slate-100/80 focus:bg-white border border-dashed border-slate-300 focus:border-green-600 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-green-600/30 placeholder:text-xs placeholder:font-normal placeholder:text-slate-400 print:border-transparent print:bg-transparent print:px-0 print:placeholder:text-transparent"
+                className="doc-corner-note w-full text-right text-base leading-tight font-bold text-slate-950 bg-slate-50/80 hover:bg-slate-100/80 focus:bg-white border border-dashed border-slate-300 focus:border-green-600 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-green-600/30 placeholder:text-xs placeholder:font-normal placeholder:text-slate-400 print:border-transparent print:bg-transparent print:px-0 print:placeholder:text-transparent"
               />
             </div>
           </div>
@@ -357,24 +357,24 @@ export const WorkloadRosterView: React.FC<WorkloadRosterViewProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-slate-800 text-center text-[11px]">
+            <table className="doc-table w-full border-collapse border border-slate-800 text-center text-[12px] leading-tight">
               <thead>
                 <tr className="bg-slate-50">
                   <th
                     rowSpan={2}
-                    className="border border-slate-700 px-1.5 py-1 font-semibold text-slate-900 w-8"
+                    className="border border-slate-700 px-1.5 py-1 font-semibold text-slate-900 w-9"
                   >
                     ลำดับ
                   </th>
                   <th
                     rowSpan={2}
-                    className="border border-slate-700 px-2 py-1 font-semibold text-slate-900 text-left min-w-[148px]"
+                    className="border border-slate-700 px-2 py-1 font-semibold text-slate-900 text-left min-w-[155px]"
                   >
                     ชื่อ - สกุล
                   </th>
                   <th
                     rowSpan={2}
-                    className="border border-slate-700 px-2 py-1 font-semibold text-slate-900 min-w-[96px]"
+                    className="border border-slate-700 px-2 py-1 font-semibold text-slate-900 min-w-[100px]"
                   >
                     ตำแหน่ง
                   </th>
@@ -399,7 +399,7 @@ export const WorkloadRosterView: React.FC<WorkloadRosterViewProps> = ({
                         key={d}
                         onClick={() => handleToggleHoliday(d)}
                         title={`คลิกเพื่อสลับวันที่ ${d} เป็นวันหยุด / วันทำการ`}
-                        className={`border border-slate-700 px-0.5 py-1 font-mono font-bold tabular-nums min-w-[24px] cursor-pointer hover:opacity-85 ${
+                        className={`border border-slate-700 px-0.5 py-1 font-bold tabular-nums min-w-[24px] cursor-pointer hover:opacity-85 ${
                           isHol ? 'bg-red-800 text-white' : 'bg-white text-slate-900'
                         }`}
                       >
@@ -407,16 +407,16 @@ export const WorkloadRosterView: React.FC<WorkloadRosterViewProps> = ({
                       </th>
                     );
                   })}
-                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold text-green-800 w-8">
+                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold text-green-800 whitespace-nowrap">
                     ช*
                   </th>
-                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold text-green-800 w-8">
+                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold text-green-800 whitespace-nowrap">
                     บ*
                   </th>
-                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold text-green-800 w-8">
+                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold text-green-800 whitespace-nowrap">
                     ด*
                   </th>
-                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold text-green-900 w-9">
+                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold text-green-900 whitespace-nowrap">
                     รวม
                   </th>
                 </tr>
@@ -436,7 +436,7 @@ export const WorkloadRosterView: React.FC<WorkloadRosterViewProps> = ({
                           : 'bg-white hover:bg-slate-50/40'
                       }
                     >
-                      <td className="border border-slate-600 px-1 py-1.5 font-mono tabular-nums font-semibold">
+                      <td className="border border-slate-600 px-1 py-1.5 tabular-nums font-semibold">
                         {idx + 1}
                       </td>
                       <td
@@ -450,7 +450,7 @@ export const WorkloadRosterView: React.FC<WorkloadRosterViewProps> = ({
                               {s.staff.fullName}
                             </div>
                             {s.staff.positionSubLabel && (
-                              <div className="text-[10px] text-slate-600 leading-tight mt-0.5">
+                              <div className="text-[11px] text-slate-600 leading-tight mt-0.5">
                                 {s.staff.positionSubLabel}
                               </div>
                             )}
@@ -460,7 +460,7 @@ export const WorkloadRosterView: React.FC<WorkloadRosterViewProps> = ({
                               type="button"
                               onClick={() => onEditStaffShifts(s.staff.staffId)}
                               title="กลับไปแก้ไขเวรของบุคคลนี้"
-                              className="no-print inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-green-700 hover:bg-green-100 rounded transition-colors cursor-pointer shrink-0"
+                              className="no-print inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium text-green-700 hover:bg-green-100 rounded transition-colors cursor-pointer shrink-0"
                             >
                               <Pencil className="w-2.5 h-2.5" />
                               ลงเวร
@@ -470,7 +470,7 @@ export const WorkloadRosterView: React.FC<WorkloadRosterViewProps> = ({
                       </td>
                       <td className="border border-slate-600 px-1.5 py-1.5 font-medium text-slate-900 whitespace-nowrap">
                         <div>{s.staff.positionLabel}</div>
-                        <div className="text-[10px] font-semibold text-green-700">Work load</div>
+                        <div className="text-[11px] font-semibold text-green-700">Work load</div>
                       </td>
                       {daysArray.map((d) => {
                         const isHol = holidaySet.has(d);
@@ -496,21 +496,21 @@ export const WorkloadRosterView: React.FC<WorkloadRosterViewProps> = ({
                               rowKey="workloadShifts"
                               value={val}
                               isHoliday={isHol}
-                              compact
+                              docMode
                             />
                           </td>
                         );
                       })}
-                      <td className="border border-slate-600 px-1 py-1.5 font-mono tabular-nums text-green-700">
+                      <td className="border border-slate-600 px-1 py-1.5 tabular-nums text-green-700">
                         {s.workloadMorningDays.length > 0 ? s.workloadMorningDays.length : ''}
                       </td>
-                      <td className="border border-slate-600 px-1 py-1.5 font-mono tabular-nums text-green-700">
+                      <td className="border border-slate-600 px-1 py-1.5 tabular-nums text-green-700">
                         {s.workloadAfternoonDays.length > 0 ? s.workloadAfternoonDays.length : ''}
                       </td>
-                      <td className="border border-slate-600 px-1 py-1.5 font-mono tabular-nums text-green-700">
+                      <td className="border border-slate-600 px-1 py-1.5 tabular-nums text-green-700">
                         {s.workloadNightDays.length > 0 ? s.workloadNightDays.length : ''}
                       </td>
-                      <td className="border border-slate-600 px-1 py-1.5 font-mono tabular-nums font-bold text-green-800 bg-green-50/40 print:bg-white">
+                      <td className="border border-slate-600 px-1 py-1.5 tabular-nums font-bold text-green-800 bg-green-50/40 print:bg-white">
                         {s.workloadCount > 0 ? s.workloadCount : ''}
                       </td>
                     </tr>
@@ -522,16 +522,16 @@ export const WorkloadRosterView: React.FC<WorkloadRosterViewProps> = ({
                   <td colSpan={3 + daysInMonth} className="border border-slate-700 px-3 py-1.5 text-right">
                     รวมจำนวนเวร Workload ทั้งสิ้น ({filteredSummaries.length} คน)
                   </td>
-                  <td className="border border-slate-700 px-1 py-1.5 font-mono tabular-nums text-green-800">
+                  <td className="border border-slate-700 px-1 py-1.5 tabular-nums text-green-800">
                     {totals.morning}
                   </td>
-                  <td className="border border-slate-700 px-1 py-1.5 font-mono tabular-nums text-green-800">
+                  <td className="border border-slate-700 px-1 py-1.5 tabular-nums text-green-800">
                     {totals.afternoon}
                   </td>
-                  <td className="border border-slate-700 px-1 py-1.5 font-mono tabular-nums text-green-800">
+                  <td className="border border-slate-700 px-1 py-1.5 tabular-nums text-green-800">
                     {totals.night}
                   </td>
-                  <td className="border border-slate-700 px-1 py-1.5 font-mono tabular-nums text-green-900">
+                  <td className="border border-slate-700 px-1 py-1.5 tabular-nums text-green-900">
                     {totals.total}
                   </td>
                 </tr>
@@ -541,7 +541,7 @@ export const WorkloadRosterView: React.FC<WorkloadRosterViewProps> = ({
         )}
 
         {/* Official Two-Column Signature Block */}
-        <div className="print-avoid-break mt-8 grid grid-cols-2 gap-8 text-xs text-slate-900 px-4">
+        <div className="doc-signature print-avoid-break mt-8 grid grid-cols-2 gap-8 text-[13px] text-slate-900 px-4">
           <div className="text-center space-y-1">
             <div>ลงชื่อ...................................................ผู้จัดตารางปฏิบัติงาน</div>
             <div className="font-semibold">( {settings.schedulerName} )</div>

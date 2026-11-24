@@ -1069,14 +1069,14 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
 
       {/* Printable Individual A4 Container (6-Row Grid + Live Personal Reimbursement Summary) */}
       <div className="print-full-width space-y-6">
-        <div className="print-only text-center space-y-0.5 mb-2">
-          <h2 className="text-base font-bold text-slate-950">
+        <div className="print-only thai-sarabun-doc text-center space-y-0.5 mb-2">
+          <h2 className="doc-title text-lg font-bold leading-snug text-slate-950">
             ตารางปฏิบัติงานรายบุคคล ประจำเดือน {getThaiMonthYearLabel(month.yearAD, month.monthNumber)}
           </h2>
-          <p className="text-sm font-semibold text-slate-900">
+          <p className="doc-subtitle text-sm font-semibold text-slate-900">
             {targetStaff.fullName} ({targetStaff.positionLabel}) · {settings.departmentName}
           </p>
-          <p className="text-xs text-slate-600">{settings.hospitalName}</p>
+          <p className="doc-subtitle text-xs text-slate-700">{settings.hospitalName}</p>
         </div>
 
       {/* 6-Row Interactive Monthly Shift Grid */}

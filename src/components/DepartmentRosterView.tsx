@@ -329,23 +329,23 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
       </div>
 
       {/* Official Department Roster Sheet */}
-      <div className="print-full-width bg-white border border-slate-300 rounded-xl p-5 lg:p-6 overflow-hidden">
+      <div className="print-full-width thai-sarabun-doc bg-white border border-slate-300 rounded-xl p-5 lg:p-6 overflow-hidden">
         {/* Official Header */}
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-start gap-3 mb-4">
           <div className="hidden sm:block" />
           <div className="text-center space-y-0.5">
-            <h2 className="text-base lg:text-lg font-bold text-slate-950">
+            <h2 className="doc-title text-base lg:text-lg leading-snug font-bold text-slate-950">
               ตารางปฏิบัติงานประจำเดือน {monthLabel}
             </h2>
-            <p className="text-sm font-semibold text-slate-900">
+            <p className="doc-subtitle text-sm font-semibold text-slate-900">
               ชื่อหน่วยงาน {settings.departmentName}
             </p>
-            <p className="text-xs text-slate-600">{settings.hospitalName}</p>
+            <p className="doc-subtitle text-xs text-slate-600">{settings.hospitalName}</p>
           </div>
-          <div className="flex flex-col items-end text-right text-xs font-semibold text-slate-900 tabular-nums space-y-0.5">
+          <div className="doc-meta flex flex-col items-end text-right text-xs font-semibold text-slate-900 tabular-nums space-y-0.5">
             <div>วันทำการ {workingDaysTotal} วัน</div>
             <div>วันหยุด {month.holidays.length} วัน</div>
-            <div className="pt-1 w-full max-w-[280px]">
+            <div className="pt-1 w-full max-w-[260px]">
               <input
                 type="text"
                 maxLength={120}
@@ -354,7 +354,7 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                 onBlur={handleHeaderNoteBlur}
                 placeholder="ใส่ข้อความ (ขนาด 16 pt)..."
                 aria-label="ข้อความมุมขวาบนใต้จำนวนวันหยุด"
-                className="w-full text-right text-[16pt] leading-tight font-bold text-slate-950 bg-slate-50/80 hover:bg-slate-100/80 focus:bg-white border border-dashed border-slate-300 focus:border-teal-600 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-teal-600/30 placeholder:text-xs placeholder:font-normal placeholder:text-slate-400 print:border-transparent print:bg-transparent print:px-0 print:placeholder:text-transparent"
+                className="doc-corner-note w-full text-right text-base leading-tight font-bold text-slate-950 bg-slate-50/80 hover:bg-slate-100/80 focus:bg-white border border-dashed border-slate-300 focus:border-teal-600 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-teal-600/30 placeholder:text-xs placeholder:font-normal placeholder:text-slate-400 print:border-transparent print:bg-transparent print:px-0 print:placeholder:text-transparent"
               />
             </div>
           </div>
@@ -367,24 +367,24 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-slate-800 text-center text-[11px]">
+            <table className="doc-table w-full border-collapse border border-slate-800 text-center text-[12px] leading-tight">
               <thead>
                 <tr className="bg-slate-50">
                   <th
                     rowSpan={2}
-                    className="border border-slate-700 px-1.5 py-1 font-semibold text-slate-900 w-8"
+                    className="border border-slate-700 px-1.5 py-1 font-semibold text-slate-900 w-9"
                   >
                     ลำดับ
                   </th>
                   <th
                     rowSpan={2}
-                    className="border border-slate-700 px-2 py-1 font-semibold text-slate-900 text-left min-w-[148px]"
+                    className="border border-slate-700 px-2 py-1 font-semibold text-slate-900 text-left min-w-[155px]"
                   >
                     ชื่อ - สกุล
                   </th>
                   <th
                     rowSpan={2}
-                    className="border border-slate-700 px-2 py-1 font-semibold text-slate-900 min-w-[96px]"
+                    className="border border-slate-700 px-2 py-1 font-semibold text-slate-900 min-w-[100px]"
                   >
                     ตำแหน่ง
                   </th>
@@ -409,7 +409,7 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                         key={d}
                         onClick={() => handleToggleHoliday(d)}
                         title={`คลิกเพื่อสลับวันที่ ${d} เป็นวันหยุด / วันทำการ`}
-                        className={`border border-slate-700 px-0.5 py-1 font-mono font-bold tabular-nums min-w-[24px] cursor-pointer hover:opacity-85 ${
+                        className={`border border-slate-700 px-0.5 py-1 font-bold tabular-nums min-w-[24px] cursor-pointer hover:opacity-85 ${
                           isHol ? 'bg-red-800 text-white' : 'bg-white text-slate-900'
                         }`}
                       >
@@ -417,16 +417,16 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                       </th>
                     );
                   })}
-                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold w-8">
+                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold whitespace-nowrap">
                     เช้า
                   </th>
-                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold w-8">
+                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold whitespace-nowrap">
                     บ/ด
                   </th>
-                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold w-8">
+                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold whitespace-nowrap">
                     OT
                   </th>
-                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold w-8">
+                  <th className="border border-slate-700 px-1 py-1 bg-slate-50 font-semibold whitespace-nowrap">
                     off
                   </th>
                 </tr>
@@ -443,7 +443,7 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                         ref={isHighlighted ? highlightedRowRef : undefined}
                         className={isHighlighted ? 'bg-teal-50/40 print:bg-white' : 'bg-white'}
                       >
-                        <td className="border border-slate-600 px-1 py-1 font-mono tabular-nums font-semibold">
+                        <td className="border border-slate-600 px-1 py-1 tabular-nums font-semibold">
                           {idx + 1}
                         </td>
                         <td
@@ -458,7 +458,7 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                                 type="button"
                                 onClick={() => onEditStaffShifts(s.staff.staffId)}
                                 title="กลับไปแก้ไขเวรของบุคคลนี้"
-                                className="no-print inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 hover:bg-teal-100 rounded transition-colors cursor-pointer"
+                                className="no-print inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium text-teal-700 hover:bg-teal-100 rounded transition-colors cursor-pointer"
                               >
                                 <Pencil className="w-2.5 h-2.5" />
                                 ลงเวร
@@ -497,21 +497,21 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                                 value={val}
                                 isHoliday={isHol}
                                 isWeekend={isWeekend}
-                                compact
+                                docMode
                               />
                             </td>
                           );
                         })}
-                        <td className="border border-slate-600 px-1 py-1 font-mono tabular-nums">
+                        <td className="border border-slate-600 px-1 py-1 tabular-nums">
                           {s.workingDaysCount}
                         </td>
-                        <td className="border border-slate-600 px-1 py-1 font-mono tabular-nums">
+                        <td className="border border-slate-600 px-1 py-1 tabular-nums">
                           {s.afternoonNightRegularCount}
                         </td>
-                        <td className="border border-slate-600 px-1 py-1 font-mono tabular-nums font-semibold text-red-700">
+                        <td className="border border-slate-600 px-1 py-1 tabular-nums font-semibold text-red-700">
                           {s.mainRowOtCount}
                         </td>
-                        <td className="border border-slate-600 px-1 py-1 font-mono tabular-nums">
+                        <td className="border border-slate-600 px-1 py-1 tabular-nums">
                           {s.offCount}
                         </td>
                       </tr>
@@ -519,7 +519,7 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                       {/* Row 2: Night OT */}
                       <tr className="bg-white">
                         <td className="border border-slate-600 px-1 py-0.5" />
-                        <td className="border border-slate-600 px-2 py-0.5 text-left text-[10px] text-slate-700 whitespace-nowrap">
+                        <td className="border border-slate-600 px-2 py-0.5 text-left text-[11px] text-slate-700 whitespace-nowrap">
                           {s.staff.positionSubLabel}
                         </td>
                         <td className="border border-slate-600 px-1.5 py-0.5 font-medium text-red-600 whitespace-nowrap">
@@ -550,14 +550,14 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                                 rowKey="nightShifts"
                                 value={val}
                                 isHoliday={isHol}
-                                compact
+                                docMode
                               />
                             </td>
                           );
                         })}
                         <td className="border border-slate-600" />
                         <td className="border border-slate-600" />
-                        <td className="border border-slate-600 px-1 py-0.5 font-mono tabular-nums text-red-700">
+                        <td className="border border-slate-600 px-1 py-0.5 tabular-nums text-red-700">
                           {s.nightOtCount > 0 ? s.nightOtCount : ''}
                         </td>
                         <td className="border border-slate-600" />
@@ -599,14 +599,14 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                                 rowKey="standbyShifts"
                                 value={val}
                                 isHoliday={isHol}
-                                compact
+                                docMode
                               />
                             </td>
                           );
                         })}
                         <td className="border border-slate-600" />
                         <td className="border border-slate-600" />
-                        <td className="border border-slate-600 px-1 py-0.5 font-mono tabular-nums text-sky-700">
+                        <td className="border border-slate-600 px-1 py-0.5 tabular-nums text-sky-700">
                           {s.standbyCount > 0 ? s.standbyCount : ''}
                         </td>
                         <td className="border border-slate-600" />
@@ -645,14 +645,14 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                                   rowKey="publicHolidayShifts"
                                   value={val}
                                   isHoliday={isHol}
-                                  compact
+                                  docMode
                                 />
                               </td>
                             );
                           })}
                           <td className="border border-slate-600" />
                           <td className="border border-slate-600" />
-                          <td className="border border-slate-600 px-1 py-0.5 font-mono tabular-nums font-semibold text-fuchsia-700">
+                          <td className="border border-slate-600 px-1 py-0.5 tabular-nums font-semibold text-fuchsia-700">
                             {s.explicitPublicHolidayCount}
                           </td>
                           <td className="border border-slate-600" />
@@ -667,7 +667,7 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
         )}
 
         {/* Official Two-Column Signature Block */}
-        <div className="print-avoid-break mt-8 grid grid-cols-2 gap-8 text-xs text-slate-900 px-4">
+        <div className="doc-signature print-avoid-break mt-8 grid grid-cols-2 gap-8 text-[13px] text-slate-900 px-4">
           <div className="text-center space-y-1">
             <div>ลงชื่อ...................................................ผู้จัดตารางปฏิบัติงาน</div>
             <div className="font-semibold">( {settings.schedulerName} )</div>

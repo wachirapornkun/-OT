@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-display: "IBM Plex Sans Thai", sans-serif;
+  --font-sarabun-print: "TH Sarabun New", "TH SarabunPSK", "Sarabun", sans-serif;
+  --font-display: "IBM Plex Sans Thai", "Sarabun", sans-serif;
   --font-sans: "Sarabun", "IBM Plex Sans Thai", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
 }
@@ -22,6 +23,77 @@
   }
 }
 
+/* Official Thai Document Sheet — comfortable & crisp on screen; exact TH Sarabun 14pt/16pt when printing */
+.thai-sarabun-doc {
+  font-family: "Sarabun", "IBM Plex Sans Thai", sans-serif;
+}
+
+.doc-brace-4 {
+  height: 6.25rem;
+}
+.doc-brace-5 {
+  height: 7.75rem;
+}
+.doc-brace-6 {
+  height: 9.25rem;
+}
+.doc-brace-7 {
+  height: 10.75rem;
+}
+
+/* Exact TH Sarabun Official Print Rules (applied inside PrintA4Modal preview, A4 iframe printer, and downloaded A4 HTML) */
+.a4-print-root .thai-sarabun-doc,
+.a4-print-root .thai-sarabun-doc * {
+  font-family: "TH Sarabun New", "TH SarabunPSK", "Sarabun", sans-serif !important;
+}
+
+.a4-print-root .thai-sarabun-doc {
+  font-size: 14pt !important;
+  line-height: 1.25 !important;
+}
+
+.a4-print-root .thai-sarabun-doc .doc-title {
+  font-size: 16pt !important;
+  line-height: 1.25 !important;
+  font-weight: 700 !important;
+}
+
+.a4-print-root .thai-sarabun-doc .doc-corner-note {
+  font-size: 16pt !important;
+  line-height: 1.2 !important;
+  font-weight: 700 !important;
+}
+
+.a4-print-root .thai-sarabun-doc .doc-subtitle,
+.a4-print-root .thai-sarabun-doc .doc-meta,
+.a4-print-root .thai-sarabun-doc .doc-signature,
+.a4-print-root .thai-sarabun-doc .doc-signature * {
+  font-size: 14pt !important;
+  line-height: 1.3 !important;
+}
+
+.a4-print-root .thai-sarabun-doc .doc-table,
+.a4-print-root .thai-sarabun-doc .doc-table th,
+.a4-print-root .thai-sarabun-doc .doc-table td,
+.a4-print-root .thai-sarabun-doc .doc-table span,
+.a4-print-root .thai-sarabun-doc .doc-table div {
+  font-size: 14pt !important;
+  line-height: 1.2 !important;
+}
+
+.a4-print-root .doc-brace-4 {
+  height: 8.25rem !important;
+}
+.a4-print-root .doc-brace-5 {
+  height: 10.25rem !important;
+}
+.a4-print-root .doc-brace-6 {
+  height: 12.25rem !important;
+}
+.a4-print-root .doc-brace-7 {
+  height: 14.25rem !important;
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
@@ -30,7 +102,7 @@
   display: none;
 }
 
-/* Official Thai Ministry of Public Health A4 Landscape Print Styles */
+/* Official Thai Ministry of Public Health A4 Landscape Print Styles (Browser Native Ctrl+P) */
 @media print {
   @page {
     size: A4 landscape;
@@ -43,7 +115,60 @@
     color: #000000 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    font-size: 11px !important;
+    font-family: "TH Sarabun New", "TH SarabunPSK", "Sarabun", sans-serif !important;
+    font-size: 14pt !important;
+  }
+
+  .thai-sarabun-doc,
+  .thai-sarabun-doc * {
+    font-family: "TH Sarabun New", "TH SarabunPSK", "Sarabun", sans-serif !important;
+  }
+
+  .thai-sarabun-doc {
+    font-size: 14pt !important;
+    line-height: 1.25 !important;
+  }
+
+  .thai-sarabun-doc .doc-title {
+    font-size: 16pt !important;
+    line-height: 1.25 !important;
+    font-weight: 700 !important;
+  }
+
+  .thai-sarabun-doc .doc-corner-note {
+    font-size: 16pt !important;
+    line-height: 1.2 !important;
+    font-weight: 700 !important;
+  }
+
+  .thai-sarabun-doc .doc-subtitle,
+  .thai-sarabun-doc .doc-meta,
+  .thai-sarabun-doc .doc-signature,
+  .thai-sarabun-doc .doc-signature * {
+    font-size: 14pt !important;
+    line-height: 1.3 !important;
+  }
+
+  .thai-sarabun-doc .doc-table,
+  .thai-sarabun-doc .doc-table th,
+  .thai-sarabun-doc .doc-table td,
+  .thai-sarabun-doc .doc-table span,
+  .thai-sarabun-doc .doc-table div {
+    font-size: 14pt !important;
+    line-height: 1.2 !important;
+  }
+
+  .doc-brace-4 {
+    height: 8.25rem !important;
+  }
+  .doc-brace-5 {
+    height: 10.25rem !important;
+  }
+  .doc-brace-6 {
+    height: 12.25rem !important;
+  }
+  .doc-brace-7 {
+    height: 14.25rem !important;
   }
 
   .no-print {
