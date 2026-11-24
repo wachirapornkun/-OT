@@ -68,16 +68,29 @@ export interface StaffMember {
   visibility: 'department';
 }
 
-export type ProductivityMode = 'cases' | 'directHours';
+export type ProductivityMode = 'asa' | 'cases' | 'directHours';
 export type ProductivityStaffScope = 'RN' | 'ALL';
 
 export interface AnesthesiaProductivityInput {
   mode: ProductivityMode;
   staffScope: ProductivityStaffScope;
   hoursPerShift: number;
+  reliefFactor: number; // ตัวคูณเผื่อวันลา/อบรม/หยุดพักผ่อนตามสูตรกองการพยาบาล (1.0 / 1.2 / 1.4)
   includeWorkloadInOt: boolean;
   includeSmcInOt: boolean;
   includeStandbyInHours: boolean;
+  // เกณฑ์กองการพยาบาล: จำแนกประเภทผู้ป่วยวิสัญญีตาม ASA Physical Status Class I–V
+  asa1Cases: number;
+  asa1HoursPerCase: number;
+  asa2Cases: number;
+  asa2HoursPerCase: number;
+  asa3Cases: number;
+  asa3HoursPerCase: number;
+  asa4Cases: number;
+  asa4HoursPerCase: number;
+  asa5Cases: number;
+  asa5HoursPerCase: number;
+  // ทางเลือก: จำแนกตามเทคนิค/ประเภทบริการวิสัญญี
   gaCases: number;
   gaHoursPerCase: number;
   gaComplexCases: number;
@@ -92,12 +105,24 @@ export interface AnesthesiaProductivityInput {
 }
 
 export const DEFAULT_ANESTHESIA_PRODUCTIVITY: AnesthesiaProductivityInput = {
-  mode: 'cases',
+  mode: 'asa',
   staffScope: 'RN',
   hoursPerShift: 7,
+  reliefFactor: 1.4,
   includeWorkloadInOt: true,
   includeSmcInOt: true,
   includeStandbyInHours: false,
+  // ค่ามาตรฐานชั่วโมงการพยาบาลวิสัญญีต่อรายตามระดับ ASA (วิจัยภาระงานตามกรอบกองการพยาบาล)
+  asa1Cases: 0,
+  asa1HoursPerCase: 3.53,
+  asa2Cases: 0,
+  asa2HoursPerCase: 5.33,
+  asa3Cases: 0,
+  asa3HoursPerCase: 6.64,
+  asa4Cases: 0,
+  asa4HoursPerCase: 7.12,
+  asa5Cases: 0,
+  asa5HoursPerCase: 7.53,
   gaCases: 0,
   gaHoursPerCase: 3.5,
   gaComplexCases: 0,

@@ -760,6 +760,9 @@ function WorkspaceApp({ user }: { user: User }) {
                   month={effectiveMonth}
                   settings={settings}
                   summaries={summaries}
+                  activeStaff={activeStaff}
+                  entriesByStaffId={entriesByStaffId}
+                  onSelectMonthId={setSelectedMonthId}
                   onEditStaffShifts={handleEditStaffFromRoster}
                   onPrintA4={(title) => handleOpenPrintA4(title)}
                 />

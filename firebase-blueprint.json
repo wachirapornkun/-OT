@@ -274,7 +274,7 @@
         },
         "productivity": {
           "type": "object",
-          "description": "Monthly anesthesiology nursing productivity parameters and case workload counts."
+          "description": "Monthly anesthesiology nursing productivity parameters (MOPH Nursing Division ASA Class I-V, case-type breakdown, direct hours, and relief factor)."
         },
         "status": {
           "type": "string",

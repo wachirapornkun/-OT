@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -419,16 +420,56 @@ function sanitizeProductivityInput(
     if (!Number.isFinite(n)) return fallback;
     return Math.round(Math.max(min, Math.min(max, n)) * 100) / 100;
   };
+  const validMode =
+    raw.mode === 'asa' || raw.mode === 'cases' || raw.mode === 'directHours'
+      ? raw.mode
+      : DEFAULT_ANESTHESIA_PRODUCTIVITY.mode;
   return {
-    mode: raw.mode === 'directHours' ? 'directHours' : 'cases',
+    mode: validMode,
     staffScope: raw.staffScope === 'ALL' ? 'ALL' : 'RN',
     hoursPerShift: clampNum(raw.hoursPerShift, DEFAULT_ANESTHESIA_PRODUCTIVITY.hoursPerShift, 1, 24),
+    reliefFactor: clampNum(raw.reliefFactor, DEFAULT_ANESTHESIA_PRODUCTIVITY.reliefFactor, 1, 2),
     includeWorkloadInOt: Boolean(
       raw.includeWorkloadInOt ?? DEFAULT_ANESTHESIA_PRODUCTIVITY.includeWorkloadInOt,
     ),
     includeSmcInOt: Boolean(raw.includeSmcInOt ?? DEFAULT_ANESTHESIA_PRODUCTIVITY.includeSmcInOt),
     includeStandbyInHours: Boolean(
       raw.includeStandbyInHours ?? DEFAULT_ANESTHESIA_PRODUCTIVITY.includeStandbyInHours,
+    ),
+    asa1Cases: clampNum(raw.asa1Cases, 0, 0, 100000),
+    asa1HoursPerCase: clampNum(
+      raw.asa1HoursPerCase,
+      DEFAULT_ANESTHESIA_PRODUCTIVITY.asa1HoursPerCase,
+      0,
+      48,
+    ),
+    asa2Cases: clampNum(raw.asa2Cases, 0, 0, 100000),
+    asa2HoursPerCase: clampNum(
+      raw.asa2HoursPerCase,
+      DEFAULT_ANESTHESIA_PRODUCTIVITY.asa2HoursPerCase,
+      0,
+      48,
+    ),
+    asa3Cases: clampNum(raw.asa3Cases, 0, 0, 100000),
+    asa3HoursPerCase: clampNum(
+      raw.asa3HoursPerCase,
+      DEFAULT_ANESTHESIA_PRODUCTIVITY.asa3HoursPerCase,
+      0,
+      48,
+    ),
+    asa4Cases: clampNum(raw.asa4Cases, 0, 0, 100000),
+    asa4HoursPerCase: clampNum(
+      raw.asa4HoursPerCase,
+      DEFAULT_ANESTHESIA_PRODUCTIVITY.asa4HoursPerCase,
+      0,
+      48,
+    ),
+    asa5Cases: clampNum(raw.asa5Cases, 0, 0, 100000),
+    asa5HoursPerCase: clampNum(
+      raw.asa5HoursPerCase,
+      DEFAULT_ANESTHESIA_PRODUCTIVITY.asa5HoursPerCase,
+      0,
+      48,
     ),
     gaCases: clampNum(raw.gaCases, 0, 0, 100000),
     gaHoursPerCase: clampNum(
@@ -520,6 +561,19 @@ export async function updateRosterMonthAdmin(
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
+}
+
+/**
+ * Ensures the target month document exists and persists sanitized monthly Productivity parameters.
+ */
+export async function saveMonthProductivity(
+  monthId: string,
+  productivity: Partial<AnesthesiaProductivityInput>,
+): Promise<AnesthesiaProductivityInput> {
+  const sanitized = sanitizeProductivityInput(productivity);
+  await ensureRosterMonth(monthId);
+  await updateRosterMonthAdmin(monthId, { productivity: sanitized });
+  return sanitized;
 }
 
 export function subscribeMonthEntries(
@@ -695,3 +749,54 @@ export async function seedOctober2569DepartmentData(adminUid = ''): Promise<void
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
+
+/**
+ * Fetches existing RosterMonth docs and their shift entries for a requested list of monthIds
+ * (e.g., 12 months of a fiscal or calendar year) using rules-compliant department visibility queries.
+ */
+export async function fetchYearlyMonthsAndEntries(monthIds: string[]): Promise<{
+  monthsById: Record<string, RosterMonth>;
+  entriesByMonthId: Record<string, Record<string, MonthlyShiftEntry>>;
+}> {
+  const targetSet = new Set(monthIds);
+  const monthsById: Record<string, RosterMonth> = {};
+  const entriesByMonthId: Record<string, Record<string, MonthlyShiftEntry>> = {};
+
+  try {
+    const monthsQuery = query(
+      collection(db, 'months'),
+      where('visibility', '==', 'department'),
+    );
+    const monthsSnap = await getDocs(monthsQuery);
+    monthsSnap.docs.forEach((docSnap) => {
+      const data = docSnap.data() as RosterMonth;
+      const id = data.monthId || docSnap.id;
+      if (targetSet.has(id)) {
+        monthsById[id] = data;
+      }
+    });
+
+    const existingIds = monthIds.filter((id) => Boolean(monthsById[id]));
+    await Promise.all(
+      existingIds.map(async (monthId) => {
+        const entriesQuery = query(
+          collection(db, 'months', monthId, 'entries'),
+          where('visibility', '==', 'department'),
+        );
+        const entriesSnap = await getDocs(entriesQuery);
+        const map: Record<string, MonthlyShiftEntry> = {};
+        entriesSnap.docs.forEach((d) => {
+          const entry = d.data() as MonthlyShiftEntry;
+          map[entry.staffId] = entry;
+        });
+        entriesByMonthId[monthId] = map;
+      }),
+    );
+
+    return { monthsById, entriesByMonthId };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'months');
+    return { monthsById, entriesByMonthId };
+  }
+}
+

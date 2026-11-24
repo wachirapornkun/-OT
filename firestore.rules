@@ -172,8 +172,13 @@ service cloud.firestore {
           'directRequiredHours'
         ])
         && p.keys().hasOnly([
-          'mode', 'staffScope', 'hoursPerShift',
+          'mode', 'staffScope', 'hoursPerShift', 'reliefFactor',
           'includeWorkloadInOt', 'includeSmcInOt', 'includeStandbyInHours',
+          'asa1Cases', 'asa1HoursPerCase',
+          'asa2Cases', 'asa2HoursPerCase',
+          'asa3Cases', 'asa3HoursPerCase',
+          'asa4Cases', 'asa4HoursPerCase',
+          'asa5Cases', 'asa5HoursPerCase',
           'gaCases', 'gaHoursPerCase',
           'gaComplexCases', 'gaComplexHoursPerCase',
           'regionalCases', 'regionalHoursPerCase',
@@ -181,12 +186,23 @@ service cloud.firestore {
           'clinicVisitCases', 'clinicVisitHoursPerCase',
           'directRequiredHours'
         ])
-        && p.mode is string && p.mode in ['cases', 'directHours']
+        && p.mode is string && p.mode in ['asa', 'cases', 'directHours']
         && p.staffScope is string && p.staffScope in ['RN', 'ALL']
         && p.hoursPerShift is number && p.hoursPerShift >= 1 && p.hoursPerShift <= 24
+        && (!('reliefFactor' in p) || (p.reliefFactor is number && p.reliefFactor >= 1 && p.reliefFactor <= 2))
         && p.includeWorkloadInOt is bool
         && p.includeSmcInOt is bool
         && p.includeStandbyInHours is bool
+        && (!('asa1Cases' in p) || (p.asa1Cases is number && p.asa1Cases >= 0 && p.asa1Cases <= 100000))
+        && (!('asa1HoursPerCase' in p) || (p.asa1HoursPerCase is number && p.asa1HoursPerCase >= 0 && p.asa1HoursPerCase <= 48))
+        && (!('asa2Cases' in p) || (p.asa2Cases is number && p.asa2Cases >= 0 && p.asa2Cases <= 100000))
+        && (!('asa2HoursPerCase' in p) || (p.asa2HoursPerCase is number && p.asa2HoursPerCase >= 0 && p.asa2HoursPerCase <= 48))
+        && (!('asa3Cases' in p) || (p.asa3Cases is number && p.asa3Cases >= 0 && p.asa3Cases <= 100000))
+        && (!('asa3HoursPerCase' in p) || (p.asa3HoursPerCase is number && p.asa3HoursPerCase >= 0 && p.asa3HoursPerCase <= 48))
+        && (!('asa4Cases' in p) || (p.asa4Cases is number && p.asa4Cases >= 0 && p.asa4Cases <= 100000))
+        && (!('asa4HoursPerCase' in p) || (p.asa4HoursPerCase is number && p.asa4HoursPerCase >= 0 && p.asa4HoursPerCase <= 48))
+        && (!('asa5Cases' in p) || (p.asa5Cases is number && p.asa5Cases >= 0 && p.asa5Cases <= 100000))
+        && (!('asa5HoursPerCase' in p) || (p.asa5HoursPerCase is number && p.asa5HoursPerCase >= 0 && p.asa5HoursPerCase <= 48))
         && p.gaCases is number && p.gaCases >= 0 && p.gaCases <= 100000
         && p.gaHoursPerCase is number && p.gaHoursPerCase >= 0 && p.gaHoursPerCase <= 48
         && p.gaComplexCases is number && p.gaComplexCases >= 0 && p.gaComplexCases <= 100000
