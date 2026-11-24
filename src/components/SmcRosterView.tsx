@@ -399,11 +399,12 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                     <tr
                       key={s.staff.staffId}
                       ref={isHighlighted ? highlightedRowRef : undefined}
-                      className={
+                      data-person-group={idx}
+                      className={`${
                         isHighlighted
                           ? 'bg-purple-50/50 print:bg-white'
                           : 'bg-white hover:bg-slate-50/40'
-                      }
+                      }${idx > 0 && idx % 8 === 0 ? ' print-page-break-before' : ''}`}
                     >
                       <td className="border border-slate-600 px-1 py-1.5 tabular-nums font-semibold">
                         {idx + 1}
@@ -492,7 +493,10 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
         )}
 
         {/* Official Two-Column Signature Block */}
-        <div className="doc-signature print-avoid-break mt-8 grid grid-cols-2 gap-8 text-[13px] text-slate-900 px-4">
+        <div
+          data-print-footer="true"
+          className="doc-signature print-avoid-break mt-8 grid grid-cols-2 gap-8 text-[13px] text-slate-900 px-4"
+        >
           <div className="text-center space-y-1">
             <div>ลงชื่อ...................................................ผู้จัดตารางปฏิบัติงาน</div>
             <div className="font-semibold">( {settings.schedulerName} )</div>

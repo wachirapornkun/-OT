@@ -441,7 +441,10 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                       {/* Row 1: Main Shifts */}
                       <tr
                         ref={isHighlighted ? highlightedRowRef : undefined}
-                        className={isHighlighted ? 'bg-teal-50/40 print:bg-white' : 'bg-white'}
+                        data-person-group={idx}
+                        className={`${isHighlighted ? 'bg-teal-50/40 print:bg-white' : 'bg-white'}${
+                          idx > 0 && idx % 8 === 0 ? ' print-page-break-before' : ''
+                        }`}
                       >
                         <td className="border border-slate-600 px-1 py-1 tabular-nums font-semibold">
                           {idx + 1}
@@ -517,7 +520,7 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                       </tr>
 
                       {/* Row 2: Night OT */}
-                      <tr className="bg-white">
+                      <tr data-person-group={idx} className="bg-white">
                         <td className="border border-slate-600 px-1 py-0.5" />
                         <td className="border border-slate-600 px-2 py-0.5 text-left text-[11px] text-slate-700 whitespace-nowrap">
                           {s.staff.positionSubLabel}
@@ -565,6 +568,7 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
 
                       {/* Row 3: Standby Night (Workload shifts are separated into WorkloadRosterView) */}
                       <tr
+                        data-person-group={idx}
                         className={`bg-white ${
                           hasPublicHolidayRow ? '' : 'border-b-2 border-slate-800'
                         }`}
@@ -614,7 +618,10 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
 
                       {/* Row 5 (Conditional): Public Holiday / Special Shifts — shown right after Standby only when data is entered */}
                       {hasPublicHolidayRow && (
-                        <tr className="bg-white border-b-2 border-slate-800">
+                        <tr
+                          data-person-group={idx}
+                          className="bg-white border-b-2 border-slate-800"
+                        >
                           <td className="border border-slate-600 px-1 py-0.5" />
                           <td className="border border-slate-600 px-2 py-0.5" />
                           <td className="border border-slate-600 px-1.5 py-0.5 font-medium text-fuchsia-600 whitespace-nowrap">
@@ -667,7 +674,10 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
         )}
 
         {/* Official Two-Column Signature Block */}
-        <div className="doc-signature print-avoid-break mt-8 grid grid-cols-2 gap-8 text-[13px] text-slate-900 px-4">
+        <div
+          data-print-footer="true"
+          className="doc-signature print-avoid-break mt-8 grid grid-cols-2 gap-8 text-[13px] text-slate-900 px-4"
+        >
           <div className="text-center space-y-1">
             <div>ลงชื่อ...................................................ผู้จัดตารางปฏิบัติงาน</div>
             <div className="font-semibold">( {settings.schedulerName} )</div>

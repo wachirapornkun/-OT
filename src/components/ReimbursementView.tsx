@@ -319,7 +319,12 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                     return (
                       <React.Fragment key={s.staff.staffId}>
                         {/* Row 1: ช */}
-                        <tr className="text-black">
+                        <tr
+                          data-person-group={idx}
+                          className={`text-black${
+                            idx > 0 && idx % 8 === 0 ? ' print-page-break-before' : ''
+                          }`}
+                        >
                           <td className="border border-slate-600 px-1.5 py-1 text-center tabular-nums font-semibold">
                             {idx + 1}
                           </td>
@@ -390,7 +395,7 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                         </tr>
 
                         {/* Row 2: บ */}
-                        <tr className="text-black">
+                        <tr data-person-group={idx} className="text-black">
                           <td className="border border-slate-600" />
                           <td className="border border-slate-600" />
                           <td className="border border-slate-600" />
@@ -421,7 +426,7 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                         </tr>
 
                         {/* Row 3: ด */}
-                        <tr className="text-black">
+                        <tr data-person-group={idx} className="text-black">
                           <td className="border border-slate-600" />
                           <td className="border border-slate-600" />
                           <td className="border border-slate-600" />
@@ -452,7 +457,10 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                         </tr>
 
                         {/* Row 4: เวรดึก Standby (สีฟ้า เหมือนต้นฉบับ) */}
-                        <tr className={`text-sky-600 ${hasPubRows ? '' : 'border-b-2 border-slate-800'}`}>
+                        <tr
+                          data-person-group={idx}
+                          className={`text-sky-600 ${hasPubRows ? '' : 'border-b-2 border-slate-800'}`}
+                        >
                           <td className="border border-slate-600" />
                           <td
                             colSpan={2}
@@ -491,6 +499,7 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                           return (
                             <tr
                               key={item.code}
+                              data-person-group={idx}
                               className={`bg-white text-black ${
                                 isLastPubRow ? 'border-b-2 border-slate-800' : ''
                               }`}
@@ -532,7 +541,7 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                   })}
 
                   {/* Grand Total Row */}
-                  <tr className="bg-slate-100 font-bold text-black">
+                  <tr data-print-total-row="true" className="bg-slate-100 font-bold text-black">
                     <td colSpan={7} className="border border-slate-700 px-3 py-2 text-right">
                       รวมทั้งสิ้น
                     </td>
@@ -553,7 +562,10 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
           )}
 
           {/* Thai Baht Text + Official 3-Column Signature Block */}
-          <div className="doc-signature print-avoid-break mt-4 space-y-6 text-[13px] text-black">
+          <div
+            data-print-footer="true"
+            className="doc-signature print-avoid-break mt-4 space-y-6 text-[13px] text-black"
+          >
             <div className="flex flex-wrap items-center gap-6 px-2">
               <span className="font-semibold">รวมทั้งสิ้น (ตัวอักษร)</span>
               <span className="font-bold text-sm">{numberToThaiBahtText(grandRegularOt)}</span>
@@ -625,7 +637,10 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                   {workloadList.map((s, idx) => (
                     <React.Fragment key={s.staff.staffId}>
                       {/* Row 1: ช* */}
-                      <tr>
+                      <tr
+                        data-person-group={idx}
+                        className={idx > 0 && idx % 8 === 0 ? 'print-page-break-before' : undefined}
+                      >
                         <td className="border border-slate-600 px-1.5 py-1 text-center tabular-nums font-semibold">
                           {idx + 1}
                         </td>
@@ -651,7 +666,7 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                       </tr>
 
                       {/* Row 2: บ* */}
-                      <tr>
+                      <tr data-person-group={idx}>
                         <td className="border border-slate-600" />
                         <td className="border border-slate-600" />
                         <td className="border border-slate-600" />
@@ -669,7 +684,7 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                       </tr>
 
                       {/* Row 3: ด* */}
-                      <tr className="border-b-2 border-slate-800">
+                      <tr data-person-group={idx} className="border-b-2 border-slate-800">
                         <td className="border border-slate-600" />
                         <td className="border border-slate-600" />
                         <td className="border border-slate-600" />
@@ -692,7 +707,10 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                     </React.Fragment>
                   ))}
 
-                  <tr className="bg-slate-100 font-bold text-slate-950">
+                  <tr
+                    data-print-total-row="true"
+                    className="bg-slate-100 font-bold text-slate-950"
+                  >
                     <td colSpan={5} className="border border-slate-700 px-3 py-2 text-right">
                       รวมจำนวนเวร Workload ทั้งสิ้น
                     </td>
@@ -753,7 +771,13 @@ export const ReimbursementView: React.FC<ReimbursementViewProps> = ({
                   const regularOnlyBaht =
                     s.otMorningAmount + s.otAfternoonAmount + s.otNightAmount;
                   return (
-                    <tr key={s.staff.staffId} className="hover:bg-slate-50/70">
+                    <tr
+                      key={s.staff.staffId}
+                      data-person-group={idx}
+                      className={`hover:bg-slate-50/70${
+                        idx > 0 && idx % 8 === 0 ? ' print-page-break-before' : ''
+                      }`}
+                    >
                       <td className="px-3 py-2 text-center tabular-nums text-slate-600">
                         {idx + 1}
                       </td>

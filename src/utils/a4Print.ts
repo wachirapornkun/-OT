@@ -1,7 +1,9 @@
 export type A4Orientation = 'landscape' | 'portrait';
 export type A4MarginMm = 5 | 8 | 12;
-export type A4ScaleMode = 'auto' | 100 | 90 | 85 | 80 | 75;
+export type A4ScaleMode = 'auto' | 100 | 90 | 85 | 80 | 75 | 70;
 export type A4ColorMode = 'color' | 'grayscale';
+export type A4PeoplePerPage = 8 | 6 | 10 | 0;
+export type A4RenderMode = 'print' | 'preview' | 'standalone';
 
 export interface A4PrintOptions {
   title: string;
@@ -9,6 +11,7 @@ export interface A4PrintOptions {
   marginMm: A4MarginMm;
   scaleMode: A4ScaleMode;
   colorMode: A4ColorMode;
+  peoplePerPage: A4PeoplePerPage;
 }
 
 export const DEFAULT_A4_PRINT_OPTIONS: A4PrintOptions = {
@@ -17,6 +20,7 @@ export const DEFAULT_A4_PRINT_OPTIONS: A4PrintOptions = {
   marginMm: 8,
   scaleMode: 'auto',
   colorMode: 'color',
+  peoplePerPage: 8,
 };
 
 const PX_PER_MM = 96 / 25.4; // Standard CSS pixel density (3.7795275591 px/mm)
@@ -31,57 +35,12 @@ export function getA4PrintableWidthPx(orientation: A4Orientation, marginMm: A4Ma
 }
 
 /**
- * Measures the widest content (such as a 31-day roster table) under actual A4 print styling
- * (including 14pt/16pt TH Sarabun print rules inside `.a4-print-root`) and calculates
- * the optimal zoom percentage (40% - 100%) to fit A4 width with zero clipping.
+ * Returns the printable inner height in CSS pixels for A4 paper given orientation and margins.
  */
-export function calculateAutoFitScalePercent(
-  sourceEl: HTMLElement | null,
-  orientation: A4Orientation,
-  marginMm: A4MarginMm,
-): number {
-  if (!sourceEl) return 100;
-
-  const printableWidth = getA4PrintableWidthPx(orientation, marginMm) - 8;
-  let widestContent = sourceEl.scrollWidth;
-
-  // Measure inside a temporary off-screen `.a4-print-root` so 14pt/16pt print CSS is reflected accurately
-  if (typeof document !== 'undefined' && document.body) {
-    const measureHost = document.createElement('div');
-    measureHost.className = 'a4-print-root';
-    measureHost.style.position = 'fixed';
-    measureHost.style.left = '-99999px';
-    measureHost.style.top = '0';
-    measureHost.style.width = `${printableWidth}px`;
-    measureHost.style.visibility = 'hidden';
-    measureHost.style.pointerEvents = 'none';
-    measureHost.innerHTML = preparePrintableCloneHtml(sourceEl);
-    document.body.appendChild(measureHost);
-    try {
-      widestContent = measureHost.scrollWidth;
-      measureHost.querySelectorAll('table').forEach((tbl) => {
-        if (tbl.scrollWidth > widestContent) {
-          widestContent = tbl.scrollWidth;
-        }
-      });
-    } finally {
-      document.body.removeChild(measureHost);
-    }
-  } else {
-    sourceEl.querySelectorAll('table').forEach((tbl) => {
-      if (tbl.scrollWidth > widestContent) {
-        widestContent = tbl.scrollWidth;
-      }
-    });
-  }
-
-  if (widestContent <= 0 || widestContent <= printableWidth) {
-    return 100;
-  }
-
-  const ratio = printableWidth / widestContent;
-  const percent = Math.floor(ratio * 100);
-  return Math.max(40, Math.min(100, percent));
+export function getA4PrintableHeightPx(orientation: A4Orientation, marginMm: A4MarginMm): number {
+  const pageHeightMm = orientation === 'landscape' ? 210 : 297;
+  const printableMm = Math.max(100, pageHeightMm - marginMm * 2);
+  return Math.floor(printableMm * PX_PER_MM);
 }
 
 /**
@@ -91,7 +50,7 @@ export function calculateAutoFitScalePercent(
  * - Replaces `<input>` fields (like the 16pt top-right header note) with clean static text divs
  * - Expands overflow containers and removes sticky positioning so nothing clips on paper
  */
-export function preparePrintableCloneHtml(sourceEl: HTMLElement): string {
+export function preparePrintableCloneElement(sourceEl: HTMLElement): HTMLElement {
   const clone = sourceEl.cloneNode(true) as HTMLElement;
 
   // Sync live values of inputs/textareas into clean static text blocks
@@ -114,7 +73,7 @@ export function preparePrintableCloneHtml(sourceEl: HTMLElement): string {
 
     const staticText = document.createElement('div');
     staticText.textContent = value;
-    // Preserve typographic classes (e.g. text-[16pt], font-bold, text-right) while removing input chrome
+    // Preserve typographic classes (e.g. doc-corner-note, font-bold, text-right) while removing input chrome
     const cleanedClass = (cloneInput.getAttribute('class') || '')
       .split(/\s+/)
       .filter(
@@ -151,6 +110,11 @@ export function preparePrintableCloneHtml(sourceEl: HTMLElement): string {
     (el as HTMLElement).style.position = 'static';
   });
 
+  // Remove manual Ctrl+P break classes inside paginated A4 pages so explicit .a4-sheet-page controls breaks
+  clone.querySelectorAll('.print-page-break-before').forEach((el) => {
+    el.classList.remove('print-page-break-before');
+  });
+
   // Normalize outer card wrapper styling for crisp white A4 paper
   clone.style.border = 'none';
   clone.style.boxShadow = 'none';
@@ -160,7 +124,206 @@ export function preparePrintableCloneHtml(sourceEl: HTMLElement): string {
   clone.style.background = '#ffffff';
   clone.style.overflow = 'visible';
 
-  return clone.outerHTML;
+  return clone;
+}
+
+export function preparePrintableCloneHtml(sourceEl: HTMLElement): string {
+  return preparePrintableCloneElement(sourceEl).outerHTML;
+}
+
+export interface PaginatedA4PageItem {
+  pageNumber: number;
+  startPerson: number;
+  endPerson: number;
+  html: string;
+}
+
+export interface PaginatedA4Result {
+  pages: PaginatedA4PageItem[];
+  totalPages: number;
+  totalPeople: number;
+}
+
+/**
+ * Splits a printable table sheet into explicit A4 pages containing up to `peoplePerPage` people per sheet
+ * (default 8 people per A4 page). Repeats the official document header and table `<thead>` on every page,
+ * keeps each person's multi-row block together, and places grand totals (`[data-print-total-row]` / `<tfoot>`)
+ * and signature blocks (`[data-print-footer]`) cleanly on the final page.
+ */
+export function buildPaginatedPrintablePages(
+  sourceEl: HTMLElement,
+  peoplePerPage: A4PeoplePerPage = 8,
+): PaginatedA4Result {
+  const baseClone = preparePrintableCloneElement(sourceEl);
+  const table = baseClone.querySelector('table.doc-table');
+  const tbody = table?.querySelector('tbody');
+
+  if (!table || !tbody) {
+    return {
+      pages: [{ pageNumber: 1, startPerson: 0, endPerson: 0, html: baseClone.outerHTML }],
+      totalPages: 1,
+      totalPeople: 0,
+    };
+  }
+
+  const groupIds: string[] = [];
+  const seenGroups = new Set<string>();
+  tbody.querySelectorAll('tr[data-person-group]').forEach((tr) => {
+    const gid = tr.getAttribute('data-person-group');
+    if (gid !== null && !seenGroups.has(gid)) {
+      seenGroups.add(gid);
+      groupIds.push(gid);
+    }
+  });
+
+  const totalPeople = groupIds.length;
+
+  // If pagination is disabled (0) or all staff already fit in a single chunk, return 1 page
+  if (peoplePerPage <= 0 || totalPeople === 0 || totalPeople <= peoplePerPage) {
+    return {
+      pages: [
+        {
+          pageNumber: 1,
+          startPerson: totalPeople > 0 ? 1 : 0,
+          endPerson: totalPeople,
+          html: baseClone.outerHTML,
+        },
+      ],
+      totalPages: 1,
+      totalPeople,
+    };
+  }
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < groupIds.length; i += peoplePerPage) {
+    chunks.push(groupIds.slice(i, i + peoplePerPage));
+  }
+
+  const totalPages = chunks.length;
+  const pages: PaginatedA4PageItem[] = chunks.map((chunk, pageIdx) => {
+    const isLastPage = pageIdx === totalPages - 1;
+    const allowedSet = new Set(chunk);
+    const pageClone = baseClone.cloneNode(true) as HTMLElement;
+    const pageTable = pageClone.querySelector('table.doc-table');
+    const pageTbody = pageTable?.querySelector('tbody');
+
+    if (pageTbody) {
+      Array.from(pageTbody.querySelectorAll('tr')).forEach((tr) => {
+        const gid = tr.getAttribute('data-person-group');
+        const isTotalRow = tr.getAttribute('data-print-total-row') === 'true';
+
+        if (gid !== null) {
+          if (!allowedSet.has(gid)) {
+            tr.remove();
+          }
+        } else if (isTotalRow && !isLastPage) {
+          tr.remove();
+        }
+      });
+    }
+
+    if (!isLastPage) {
+      pageTable?.querySelectorAll('tfoot').forEach((tf) => tf.remove());
+      pageClone.querySelectorAll('[data-print-footer="true"]').forEach((ft) => ft.remove());
+    }
+
+    const startPerson = pageIdx * peoplePerPage + 1;
+    const endPerson = Math.min(totalPeople, startPerson + chunk.length - 1);
+
+    return {
+      pageNumber: pageIdx + 1,
+      startPerson,
+      endPerson,
+      html: pageClone.outerHTML,
+    };
+  });
+
+  return {
+    pages,
+    totalPages,
+    totalPeople,
+  };
+}
+
+/**
+ * Measures BOTH horizontal width and vertical height of each paginated A4 page under actual
+ * `.a4-print-root` 14pt/16pt TH Sarabun print CSS, returning the optimal zoom percentage (35% - 100%)
+ * so that all `peoplePerPage` people (default 8) fit completely on 1 single A4 page with zero overflow.
+ */
+export function calculateAutoFitScalePercent(
+  sourceEl: HTMLElement | null,
+  orientation: A4Orientation,
+  marginMm: A4MarginMm,
+  peoplePerPage: A4PeoplePerPage = 8,
+): number {
+  if (!sourceEl) return 100;
+
+  const printableWidth = getA4PrintableWidthPx(orientation, marginMm) - 6;
+  const printableHeight = getA4PrintableHeightPx(orientation, marginMm) - 10;
+
+  if (typeof document === 'undefined' || !document.body) {
+    const widest = sourceEl.scrollWidth;
+    if (widest <= 0 || widest <= printableWidth) return 100;
+    return Math.max(35, Math.min(100, Math.floor((printableWidth / widest) * 100)));
+  }
+
+  const paginated = buildPaginatedPrintablePages(sourceEl, peoplePerPage);
+  const measureHost = document.createElement('div');
+  measureHost.className = 'a4-print-root';
+  measureHost.style.position = 'fixed';
+  measureHost.style.left = '-99999px';
+  measureHost.style.top = '0';
+  measureHost.style.width = `${printableWidth}px`;
+  measureHost.style.visibility = 'hidden';
+  measureHost.style.pointerEvents = 'none';
+  measureHost.innerHTML = paginated.pages
+    .map((p) => `<section class="a4-measure-page">${p.html}</section>`)
+    .join('');
+
+  document.body.appendChild(measureHost);
+  try {
+    // Pass 1: measure widest content (tables or page wrappers)
+    let widestContent = printableWidth;
+    measureHost.querySelectorAll('.a4-measure-page').forEach((pageEl) => {
+      if (pageEl.scrollWidth > widestContent) {
+        widestContent = pageEl.scrollWidth;
+      }
+    });
+    measureHost.querySelectorAll('table').forEach((tbl) => {
+      if (tbl.scrollWidth > widestContent) {
+        widestContent = tbl.scrollWidth;
+      }
+    });
+
+    const widthRatio = widestContent > 0 ? Math.min(1, printableWidth / widestContent) : 1;
+
+    // If pagination is explicitly disabled (peoplePerPage === 0), scale by width only
+    if (peoplePerPage <= 0) {
+      return Math.max(35, Math.min(100, Math.floor(widthRatio * 100)));
+    }
+
+    // Pass 2: set host width to the effective zoomed layout width so multi-line cells
+    // wrap identically to actual printed layout, then measure the tallest page height
+    const effectiveLayoutWidth = Math.ceil(printableWidth / widthRatio);
+    measureHost.style.width = `${effectiveLayoutWidth}px`;
+
+    let tallestPageHeight = 0;
+    measureHost.querySelectorAll('.a4-measure-page').forEach((pageEl) => {
+      const h = (pageEl as HTMLElement).scrollHeight;
+      if (h > tallestPageHeight) {
+        tallestPageHeight = h;
+      }
+    });
+
+    const heightRatio =
+      tallestPageHeight > 0 ? Math.min(1, printableHeight / tallestPageHeight) : 1;
+
+    const finalRatio = Math.min(widthRatio, heightRatio);
+    const percent = Math.floor(finalRatio * 100);
+    return Math.max(35, Math.min(100, percent));
+  } finally {
+    document.body.removeChild(measureHost);
+  }
 }
 
 /**
@@ -196,39 +359,74 @@ function escapeHtmlText(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+export interface BuiltA4DocumentResult {
+  html: string;
+  effectiveScalePercent: number;
+  totalPages: number;
+  totalPeople: number;
+}
+
 /**
- * Builds a complete standalone A4 HTML document ready for direct iframe printing or standalone download.
+ * Builds a complete A4 HTML document ready for direct iframe printing, live modal preview, or standalone download.
  */
 export function buildA4PrintDocumentHtml(
   sourceEl: HTMLElement,
   options: A4PrintOptions,
-  includeStandaloneToolbar = false,
-): { html: string; effectiveScalePercent: number } {
+  mode: A4RenderMode = 'print',
+): BuiltA4DocumentResult {
+  const peoplePerPage = options.peoplePerPage ?? 8;
   const effectiveScalePercent =
     options.scaleMode === 'auto'
-      ? calculateAutoFitScalePercent(sourceEl, options.orientation, options.marginMm)
+      ? calculateAutoFitScalePercent(sourceEl, options.orientation, options.marginMm, peoplePerPage)
       : options.scaleMode;
 
-  const contentHtml = preparePrintableCloneHtml(sourceEl);
+  const paginated = buildPaginatedPrintablePages(sourceEl, peoplePerPage);
   const headStyles = collectDocumentHeadStyles();
   const safeTitle = escapeHtmlText(options.title || DEFAULT_A4_PRINT_OPTIONS.title);
   const scaleFactor = effectiveScalePercent / 100;
   const pageWidthMm = options.orientation === 'landscape' ? 297 : 210;
   const pageHeightMm = options.orientation === 'landscape' ? 210 : 297;
+  const showSheetChrome = mode === 'preview' || mode === 'standalone';
+  const previewDeskZoom =
+    mode === 'preview' ? (options.orientation === 'landscape' ? 0.68 : 0.62) : 1;
 
-  const toolbarHtml = includeStandaloneToolbar
-    ? `
+  const toolbarHtml =
+    mode === 'standalone'
+      ? `
       <div class="standalone-print-bar">
         <div class="standalone-print-bar-title">
           <strong>${safeTitle}</strong>
-          <span>ขนาดกระดาษ A4 (${options.orientation === 'landscape' ? 'แนวนอน' : 'แนวตั้ง'}) · มาตราส่วน ${effectiveScalePercent}%</span>
+          <span>ขนาดกระดาษ A4 (${options.orientation === 'landscape' ? 'แนวนอน' : 'แนวตั้ง'}) · ${
+            paginated.totalPages
+          } หน้า${
+            peoplePerPage > 0 && paginated.totalPeople > 0 ? ` · หน้าละไม่เกิน ${peoplePerPage} คน` : ''
+          } · มาตราส่วน ${effectiveScalePercent}%</span>
         </div>
         <button type="button" onclick="window.print()" class="standalone-print-btn">
           สั่งพิมพ์ออกเครื่องพิมพ์ (A4)
         </button>
       </div>
     `
-    : '';
+      : '';
+
+  const pagesHtml = paginated.pages
+    .map((page) => {
+      const pageLabelHtml =
+        showSheetChrome && paginated.totalPages > 1
+          ? `<div class="a4-page-badge">หน้า ${page.pageNumber} / ${paginated.totalPages}${
+              page.startPerson > 0 ? ` · คนที่ ${page.startPerson}–${page.endPerson}` : ''
+            }</div>`
+          : '';
+      return `
+        ${pageLabelHtml}
+        <section class="a4-sheet-page" data-page-index="${page.pageNumber}">
+          <div class="a4-scale-container">
+            ${page.html}
+          </div>
+        </section>
+      `;
+    })
+    .join('\n');
 
   const html = `<!doctype html>
 <html lang="th">
@@ -262,8 +460,21 @@ export function buildA4PrintDocumentHtml(
 
       .a4-print-root {
         width: 100%;
-        background: #ffffff;
+        background: transparent;
         ${options.colorMode === 'grayscale' ? 'filter: grayscale(100%);' : ''}
+      }
+
+      .a4-sheet-page {
+        width: 100%;
+        background: #ffffff;
+        box-sizing: border-box;
+        page-break-after: always;
+        break-after: page;
+      }
+
+      .a4-sheet-page:last-child {
+        page-break-after: auto;
+        break-after: auto;
       }
 
       .a4-scale-container {
@@ -304,6 +515,10 @@ export function buildA4PrintDocumentHtml(
 
       .no-print {
         display: none !important;
+      }
+
+      .a4-page-badge {
+        display: none;
       }
 
       /* Screen-only styling for downloaded standalone HTML file */
@@ -349,58 +564,98 @@ export function buildA4PrintDocumentHtml(
       }
 
       @media screen {
-        body.standalone-sheet {
-          background: #e2e8f0 !important;
+        body.sheet-desk {
+          background: #cbd5e1 !important;
+          padding: ${mode === 'preview' ? '14px 10px 24px' : '0 0 28px'} !important;
         }
-        body.standalone-sheet .a4-print-root {
+
+        body.sheet-desk .a4-print-root {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          ${mode === 'preview' ? `zoom: ${previewDeskZoom};` : ''}
+        }
+
+        body.sheet-desk .a4-page-badge {
+          display: block;
+          width: ${pageWidthMm}mm;
+          margin: 14px auto 6px;
+          font-family: "IBM Plex Sans Thai", "Sarabun", sans-serif;
+          font-size: 15px;
+          font-weight: 600;
+          color: #334155;
+        }
+
+        body.sheet-desk .a4-page-badge:first-child {
+          margin-top: 4px;
+        }
+
+        body.sheet-desk .a4-sheet-page {
           width: ${pageWidthMm}mm;
           min-height: ${pageHeightMm}mm;
-          margin: 18px auto;
+          ${peoplePerPage > 0 ? `height: ${pageHeightMm}mm; overflow: hidden;` : ''}
+          margin: ${paginated.totalPages > 1 ? '0 auto 12px' : '12px auto'};
           padding: ${options.marginMm}mm;
-          box-shadow: 0 8px 30px rgba(15, 23, 42, 0.15);
-          box-sizing: border-box;
+          box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
+          border: 1px solid #94a3b8;
         }
       }
 
       @media print {
-        .standalone-print-bar {
+        .standalone-print-bar,
+        .a4-page-badge {
           display: none !important;
         }
-        body.standalone-sheet {
+        body.sheet-desk {
           background: #ffffff !important;
+          padding: 0 !important;
         }
-        body.standalone-sheet .a4-print-root {
+        body.sheet-desk .a4-print-root {
+          display: block !important;
+          zoom: 1 !important;
+        }
+        body.sheet-desk .a4-sheet-page {
           width: 100% !important;
           min-height: auto !important;
+          height: auto !important;
+          overflow: visible !important;
           margin: 0 !important;
           padding: 0 !important;
           box-shadow: none !important;
+          border: none !important;
         }
       }
     </style>
   </head>
-  <body class="${includeStandaloneToolbar ? 'standalone-sheet' : ''}">
+  <body class="${showSheetChrome ? 'sheet-desk' : ''}">
     ${toolbarHtml}
     <div class="a4-print-root">
-      <div class="a4-scale-container">
-        ${contentHtml}
-      </div>
+      ${pagesHtml}
     </div>
   </body>
 </html>`;
 
-  return { html, effectiveScalePercent };
+  return {
+    html,
+    effectiveScalePercent,
+    totalPages: paginated.totalPages,
+    totalPeople: paginated.totalPeople,
+  };
 }
 
 /**
  * Connects directly to the system/browser Printer Dialog via a clean hidden A4 print iframe,
- * ensuring exact A4 margins, orientation, colors, and auto-fit table width.
+ * ensuring exact A4 margins, orientation, colors, 8-people-per-page pagination, and auto-fit scale.
  */
 export async function printElementAsA4(
   sourceEl: HTMLElement,
   options: A4PrintOptions,
-): Promise<{ effectiveScalePercent: number }> {
-  const { html, effectiveScalePercent } = buildA4PrintDocumentHtml(sourceEl, options, false);
+): Promise<{ effectiveScalePercent: number; totalPages: number }> {
+  const { html, effectiveScalePercent, totalPages } = buildA4PrintDocumentHtml(
+    sourceEl,
+    options,
+    'print',
+  );
 
   return new Promise((resolve) => {
     const iframe = document.createElement('iframe');
@@ -420,7 +675,7 @@ export async function printElementAsA4(
       if (iframe.parentNode) {
         iframe.parentNode.removeChild(iframe);
       }
-      resolve({ effectiveScalePercent });
+      resolve({ effectiveScalePercent, totalPages });
     };
 
     const triggerPrint = () => {
@@ -479,7 +734,7 @@ export async function printElementAsA4(
  * where an embedded preview blocks direct printer dialogs or for offline printing.
  */
 export function downloadPrintableA4File(sourceEl: HTMLElement, options: A4PrintOptions): void {
-  const { html } = buildA4PrintDocumentHtml(sourceEl, options, true);
+  const { html } = buildA4PrintDocumentHtml(sourceEl, options, 'standalone');
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const safeFileName = (options.title || 'เอกสารตารางเวร_A4')

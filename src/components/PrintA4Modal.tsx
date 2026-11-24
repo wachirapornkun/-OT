@@ -11,6 +11,7 @@ import {
   A4ColorMode,
   A4MarginMm,
   A4Orientation,
+  A4PeoplePerPage,
   A4PrintOptions,
   A4ScaleMode,
   buildA4PrintDocumentHtml,
@@ -34,12 +35,20 @@ const SCALE_OPTIONS: { value: A4ScaleMode; label: string }[] = [
   { value: 85, label: '85%' },
   { value: 80, label: '80%' },
   { value: 75, label: '75%' },
+  { value: 70, label: '70%' },
 ];
 
 const MARGIN_OPTIONS: { value: A4MarginMm; label: string }[] = [
   { value: 5, label: 'แคบ (5 มม.)' },
   { value: 8, label: 'มาตรฐาน (8 มม.)' },
   { value: 12, label: 'กว้าง (12 มม.)' },
+];
+
+const PEOPLE_PER_PAGE_OPTIONS: { value: A4PeoplePerPage; label: string }[] = [
+  { value: 8, label: '8 คน / หน้า (มาตรฐาน)' },
+  { value: 6, label: '6 คน / หน้า' },
+  { value: 10, label: '10 คน / หน้า' },
+  { value: 0, label: 'ไม่แบ่งหน้า' },
 ];
 
 export const PrintA4Modal: React.FC<PrintA4ModalProps> = ({
@@ -53,6 +62,7 @@ export const PrintA4Modal: React.FC<PrintA4ModalProps> = ({
   const [marginMm, setMarginMm] = useState<A4MarginMm>(8);
   const [scaleMode, setScaleMode] = useState<A4ScaleMode>('auto');
   const [colorMode, setColorMode] = useState<A4ColorMode>('color');
+  const [peoplePerPage, setPeoplePerPage] = useState<A4PeoplePerPage>(8);
   const [printing, setPrinting] = useState(false);
   const [printSentNotice, setPrintSentNotice] = useState(false);
   const [downloadedNotice, setDownloadedNotice] = useState(false);
@@ -81,22 +91,29 @@ export const PrintA4Modal: React.FC<PrintA4ModalProps> = ({
       marginMm,
       scaleMode,
       colorMode,
+      peoplePerPage,
     }),
-    [documentTitle, orientation, marginMm, scaleMode, colorMode],
+    [documentTitle, orientation, marginMm, scaleMode, colorMode, peoplePerPage],
   );
 
   const previewData = useMemo(() => {
     if (!isOpen) return null;
     const sourceEl = getSourceElement();
     if (!sourceEl) return null;
-    const autoScale = calculateAutoFitScalePercent(sourceEl, orientation, marginMm);
-    const { html, effectiveScalePercent } = buildA4PrintDocumentHtml(sourceEl, options, false);
+    const autoScale = calculateAutoFitScalePercent(sourceEl, orientation, marginMm, peoplePerPage);
+    const { html, effectiveScalePercent, totalPages, totalPeople } = buildA4PrintDocumentHtml(
+      sourceEl,
+      options,
+      'preview',
+    );
     return {
       html,
       autoScale,
       effectiveScalePercent,
+      totalPages,
+      totalPeople,
     };
-  }, [isOpen, getSourceElement, orientation, marginMm, options]);
+  }, [isOpen, getSourceElement, orientation, marginMm, peoplePerPage, options]);
 
   if (!isOpen) return null;
 
@@ -126,6 +143,7 @@ export const PrintA4Modal: React.FC<PrintA4ModalProps> = ({
     setMarginMm(8);
     setScaleMode('auto');
     setColorMode('color');
+    setPeoplePerPage(8);
   };
 
   return (
@@ -166,6 +184,38 @@ export const PrintA4Modal: React.FC<PrintA4ModalProps> = ({
         <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
           {/* Left Settings Column */}
           <div className="lg:w-80 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-200 p-5 overflow-y-auto space-y-5 bg-slate-50/60">
+            {/* People Per A4 Page */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-800">
+                  จำนวนคนต่อ 1 หน้า A4
+                </label>
+                {previewData && previewData.totalPeople > 0 && (
+                  <span className="text-[11px] font-mono font-semibold text-teal-700 tabular-nums">
+                    {previewData.totalPages} หน้า ({previewData.totalPeople} คน)
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {PEOPLE_PER_PAGE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPeoplePerPage(opt.value)}
+                    className={`px-2.5 py-2 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
+                      opt.value === 8 ? 'col-span-2' : ''
+                    } ${
+                      peoplePerPage === opt.value
+                        ? 'bg-teal-700 text-white border-teal-700'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Orientation */}
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-slate-800">
@@ -325,10 +375,16 @@ export const PrintA4Modal: React.FC<PrintA4ModalProps> = ({
           </div>
 
           {/* Right Live A4 Preview Area */}
-          <div className="flex-1 min-w-0 bg-slate-200/80 p-4 sm:p-6 overflow-auto flex flex-col items-center">
-            <div className="w-full flex items-center justify-between text-xs text-slate-600 mb-3 max-w-4xl">
-              <span className="font-medium">
+          <div className="flex-1 min-w-0 bg-slate-200/80 p-4 sm:p-5 overflow-hidden flex flex-col">
+            <div className="w-full flex flex-wrap items-center justify-between gap-2 text-xs text-slate-700 mb-2.5 shrink-0">
+              <span className="font-semibold">
                 ตัวอย่างก่อนพิมพ์บนกระดาษ A4 ({orientation === 'landscape' ? 'แนวนอน' : 'แนวตั้ง'})
+                {previewData && previewData.totalPages > 0
+                  ? ` · ${previewData.totalPages} หน้า A4`
+                  : ''}
+                {peoplePerPage > 0 && previewData && previewData.totalPeople > 0
+                  ? ` (หน้าละไม่เกิน ${peoplePerPage} คน)`
+                  : ''}
               </span>
               <span className="font-mono text-[11px] text-slate-500">
                 ขอบ {marginMm} มม. · มาตราส่วน {previewData?.effectiveScalePercent ?? 100}%
@@ -336,21 +392,15 @@ export const PrintA4Modal: React.FC<PrintA4ModalProps> = ({
             </div>
 
             {previewData ? (
-              <div
-                className={`bg-white shadow-xl border border-slate-300 overflow-hidden w-full ${
-                  orientation === 'landscape'
-                    ? 'max-w-[860px] aspect-[297/210]'
-                    : 'max-w-[560px] aspect-[210/297]'
-                }`}
-              >
+              <div className="flex-1 min-h-[420px] w-full rounded-xl border border-slate-300 shadow-inner overflow-hidden bg-slate-300">
                 <iframe
                   title="ตัวอย่างเอกสาร A4 ก่อนพิมพ์"
                   srcDoc={previewData.html}
-                  className="w-full h-full border-0 bg-white"
+                  className="w-full h-full border-0 bg-slate-300"
                 />
               </div>
             ) : (
-              <div className="w-full max-w-xl py-16 bg-white border border-dashed border-slate-300 rounded-xl text-center text-sm text-slate-500">
+              <div className="w-full max-w-xl mx-auto py-16 bg-white border border-dashed border-slate-300 rounded-xl text-center text-sm text-slate-500">
                 ไม่พบพื้นที่เอกสารสำหรับพิมพ์ในหน้านี้ กรุณาเลือกหน้าตารางเวรหรือตารางเบิกเงิน OT
               </div>
             )}
