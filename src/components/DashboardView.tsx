@@ -19,13 +19,15 @@ import {
   DepartmentSettings,
   MonthlyShiftEntry,
   PersonMonthlySummary,
+  ProductivityMode,
   RosterMonth,
   StaffCategory,
   StaffMember,
 } from '../types/roster';
 import {
   fetchYearlyMonthsAndEntries,
-  updateRosterMonthAdmin,
+  saveMonthProductivity,
+  subscribeDepartmentMonths,
 } from '../services/rosterService';
 import {
   calculateMonthlyDashboard,
@@ -44,8 +46,11 @@ import {
   getThaiMonthYearLabel,
   parseMonthId,
 } from '../utils/thaiUtils';
-import { MonthlyBreakdownPanel } from './MonthlyBreakdownPanel';
-import { MonthlyProductivityEntryGrid } from './MonthlyProductivityEntryGrid';
+import { MonthlyBreakdownPanel, YearlyChartMetric } from './MonthlyBreakdownPanel';
+import {
+  MonthlyProductivityEntryGrid,
+  ProductivityWeightValues,
+} from './MonthlyProductivityEntryGrid';
 
 interface DashboardViewProps {
   month: RosterMonth;
@@ -82,6 +87,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [dashboardTab, setDashboardTab] = useState<
     'monthly-entry' | 'yearly-breakdown' | 'month-detail'
   >('monthly-entry');
+  const [yearlyChartMetric, setYearlyChartMetric] = useState<YearlyChartMetric>('shiftMix');
   const [yearType, setYearType] = useState<YearRangeType>('fiscal');
   const [selectedYearAD, setSelectedYearAD] = useState<number>(() =>
     getFiscalYearADFromMonth(month.yearAD, month.monthNumber),
@@ -92,21 +98,72 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   >({});
   const [yearlyLoading, setYearlyLoading] = useState(false);
 
-  const [draft, setDraft] = useState<AnesthesiaProductivityInput>(() =>
-    resolveProductivityInput(month),
-  );
-  const [saving, setSaving] = useState(false);
+  // Shared global calculation basis across all 3 dashboard tabs
+  const [globalOptions, setGlobalOptions] = useState<
+    Pick<
+      AnesthesiaProductivityInput,
+      | 'staffScope'
+      | 'hoursPerShift'
+      | 'reliefFactor'
+      | 'includeWorkloadInOt'
+      | 'includeSmcInOt'
+      | 'includeStandbyInHours'
+    >
+  >(() => {
+    const resolved = resolveProductivityInput(month);
+    return {
+      staffScope: resolved.staffScope,
+      hoursPerShift: resolved.hoursPerShift,
+      reliefFactor: resolved.reliefFactor,
+      includeWorkloadInOt: resolved.includeWorkloadInOt,
+      includeSmcInOt: resolved.includeSmcInOt,
+      includeStandbyInHours: resolved.includeStandbyInHours,
+    };
+  });
+
+  // Single source of truth for unsaved monthly Productivity edits across all 12 months & all 3 tabs
+  const [draftsByMonthId, setDraftsByMonthId] = useState<
+    Record<string, AnesthesiaProductivityInput>
+  >({});
+  const [dirtyMonthIds, setDirtyMonthIds] = useState<Record<string, boolean>>({});
+  const [savingMonthId, setSavingMonthId] = useState<string | null>(null);
+  const [savingAll, setSavingAll] = useState(false);
+  const [savedBanner, setSavedBanner] = useState<string>('');
+  const [saveError, setSaveError] = useState<string>('');
   const [savedNotice, setSavedNotice] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | StaffCategory>('ALL');
   const [sortByOtDesc, setSortByOtDesc] = useState(true);
 
+  // Real-time subscription to all department months so saved Productivity syncs instantly everywhere
+  useEffect(() => {
+    const unsub = subscribeDepartmentMonths((remoteMonths) => {
+      setYearlyMonthsById((prev) => ({
+        ...prev,
+        ...remoteMonths,
+      }));
+    });
+    return () => unsub();
+  }, []);
+
+  // Keep 12-month year aligned when user selects a month outside the current 12-month window
+  useEffect(() => {
+    const currentWindowIds = getMonthIdsForYear(selectedYearAD, yearType);
+    if (!currentWindowIds.includes(month.monthId)) {
+      setSelectedYearAD(
+        yearType === 'fiscal'
+          ? getFiscalYearADFromMonth(month.yearAD, month.monthNumber)
+          : month.yearAD,
+      );
+    }
+  }, [month.monthId, month.yearAD, month.monthNumber, yearType]);
+
+  // Fetch shift entries for all 12 months in the active fiscal/calendar year
   const loadYearlyData = useCallback(async () => {
     const monthIds = getMonthIdsForYear(selectedYearAD, yearType);
     setYearlyLoading(true);
     try {
       const result = await fetchYearlyMonthsAndEntries(monthIds);
-      setYearlyMonthsById(result.monthsById);
+      setYearlyMonthsById((prev) => ({ ...prev, ...result.monthsById }));
       setYearlyEntriesByMonthId(result.entriesByMonthId);
     } finally {
       setYearlyLoading(false);
@@ -133,95 +190,277 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     setDashboardTab('month-detail');
   };
 
-  const handleMonthProductivitySaved = (
-    savedMonthId: string,
-    savedProductivity: AnesthesiaProductivityInput,
-  ) => {
-    setYearlyMonthsById((prev) => {
-      const existing = prev[savedMonthId];
-      if (existing) {
+  const handleViewYearlyProductivityChart = () => {
+    setYearlyChartMetric('productivity');
+    setDashboardTab('yearly-breakdown');
+  };
+
+  const getResolvedMonthInput = useCallback(
+    (targetMonthId: string): AnesthesiaProductivityInput => {
+      const override = draftsByMonthId[targetMonthId];
+      if (override) {
+        return {
+          ...override,
+          ...globalOptions,
+        };
+      }
+      const sourceMonth =
+        targetMonthId === month.monthId ? month : yearlyMonthsById[targetMonthId];
+      const base = sourceMonth
+        ? resolveProductivityInput(sourceMonth)
+        : { ...DEFAULT_ANESTHESIA_PRODUCTIVITY };
+      return {
+        ...base,
+        ...globalOptions,
+      };
+    },
+    [draftsByMonthId, globalOptions, month, yearlyMonthsById],
+  );
+
+  // Active month draft derived from the shared single source of truth
+  const draft = useMemo(
+    () => getResolvedMonthInput(month.monthId),
+    [getResolvedMonthInput, month.monthId],
+  );
+
+  const hasUnsavedChanges = Boolean(dirtyMonthIds[month.monthId]);
+  const saving = savingMonthId === month.monthId || savingAll;
+
+  const currentYearMonthIds = useMemo(
+    () => getMonthIdsForYear(selectedYearAD, yearType),
+    [selectedYearAD, yearType],
+  );
+
+  const resolvedInputsByMonthId = useMemo(() => {
+    const map: Record<string, AnesthesiaProductivityInput> = {};
+    for (const mId of currentYearMonthIds) {
+      map[mId] = getResolvedMonthInput(mId);
+    }
+    return map;
+  }, [currentYearMonthIds, getResolvedMonthInput]);
+
+  const applySavedMonthToLocalState = useCallback(
+    (savedMonthId: string, savedProductivity: AnesthesiaProductivityInput) => {
+      setYearlyMonthsById((prev) => {
+        const existing = prev[savedMonthId];
+        if (existing) {
+          return {
+            ...prev,
+            [savedMonthId]: {
+              ...existing,
+              productivity: savedProductivity,
+            },
+          };
+        }
+        const { yearAD: mYear, monthNumber: mNum } = parseMonthId(savedMonthId);
         return {
           ...prev,
           [savedMonthId]: {
-            ...existing,
+            monthId: savedMonthId,
+            yearAD: mYear,
+            monthNumber: mNum,
+            holidays: getDefaultHolidaysForMonth(mYear, mNum),
+            publicHolidays: getDefaultPublicHolidaysForMonth(mYear, mNum),
+            payDateLabel: getDefaultPayDateLabel(mYear, mNum),
             productivity: savedProductivity,
+            status: 'open',
+            visibility: 'department',
           },
         };
-      }
-      const { yearAD: mYear, monthNumber: mNum } = parseMonthId(savedMonthId);
-      return {
-        ...prev,
-        [savedMonthId]: {
-          monthId: savedMonthId,
-          yearAD: mYear,
-          monthNumber: mNum,
-          holidays: getDefaultHolidaysForMonth(mYear, mNum),
-          publicHolidays: getDefaultPublicHolidaysForMonth(mYear, mNum),
-          payDateLabel: getDefaultPayDateLabel(mYear, mNum),
-          productivity: savedProductivity,
-          status: 'open',
-          visibility: 'department',
-        },
-      };
-    });
-    if (savedMonthId === month.monthId) {
-      setDraft(savedProductivity);
-      setHasUnsavedChanges(false);
-    }
-  };
+      });
+      setDraftsByMonthId((prev) => {
+        const next = { ...prev };
+        delete next[savedMonthId];
+        return next;
+      });
+      setDirtyMonthIds((prev) => {
+        const next = { ...prev };
+        delete next[savedMonthId];
+        return next;
+      });
+    },
+    [],
+  );
 
-  useEffect(() => {
-    setDraft(resolveProductivityInput(month));
-    setHasUnsavedChanges(false);
-    setSavedNotice(false);
-  }, [month.monthId, month.productivity]);
-
+  // Update a field for the active month (from Tab 3 Month Detail or Top Bar global toggles)
   const updateField = <K extends keyof AnesthesiaProductivityInput>(
     key: K,
     value: AnesthesiaProductivityInput[K],
   ) => {
-    setDraft((prev) => ({ ...prev, [key]: value }));
-    setHasUnsavedChanges(true);
+    const isGlobalKey =
+      key === 'staffScope' ||
+      key === 'hoursPerShift' ||
+      key === 'reliefFactor' ||
+      key === 'includeWorkloadInOt' ||
+      key === 'includeSmcInOt' ||
+      key === 'includeStandbyInHours';
+
+    if (isGlobalKey) {
+      setGlobalOptions((prev) => ({ ...prev, [key]: value }));
+    }
+
+    const targetMonthId = month.monthId;
+    setDraftsByMonthId((prev) => {
+      const current = prev[targetMonthId] || getResolvedMonthInput(targetMonthId);
+      return {
+        ...prev,
+        [targetMonthId]: {
+          ...current,
+          [key]: value,
+        },
+      };
+    });
+    setDirtyMonthIds((prev) => ({ ...prev, [targetMonthId]: true }));
     setSavedNotice(false);
+    setSavedBanner('');
+    setSaveError('');
   };
 
-  const handleSaveProductivity = async () => {
-    setSaving(true);
-    try {
-      await updateRosterMonthAdmin(month.monthId, { productivity: draft });
-      setYearlyMonthsById((prev) => ({
+  // Update a field for ANY month in the 12-month entry grid (Tab 1) -> links instantly to Tab 2 & Tab 3!
+  const handleUpdateGridMonthField = (
+    targetMonthId: string,
+    mode: ProductivityMode,
+    field: keyof AnesthesiaProductivityInput,
+    value: number,
+    weights: ProductivityWeightValues,
+  ) => {
+    setDraftsByMonthId((prev) => {
+      const current = prev[targetMonthId] || getResolvedMonthInput(targetMonthId);
+      return {
         ...prev,
-        [month.monthId]: {
-          ...(prev[month.monthId] || month),
-          productivity: draft,
+        [targetMonthId]: {
+          ...current,
+          mode,
+          ...weights,
+          [field]: value,
         },
-      }));
-      setHasUnsavedChanges(false);
-      setSavedNotice(true);
-      window.setTimeout(() => setSavedNotice(false), 3000);
+      };
+    });
+    setDirtyMonthIds((prev) => ({ ...prev, [targetMonthId]: true }));
+    setSavedNotice(false);
+    setSavedBanner('');
+    setSaveError('');
+  };
+
+  // Apply shared NHPP weights across months in the 12-month entry grid
+  const handleApplySharedWeights = (
+    nextWeights: ProductivityWeightValues,
+    targetMonthIds: string[],
+  ) => {
+    setDraftsByMonthId((prev) => {
+      const next = { ...prev };
+      for (const mId of targetMonthIds) {
+        const cur = prev[mId] || getResolvedMonthInput(mId);
+        next[mId] = { ...cur, ...nextWeights };
+      }
+      return next;
+    });
+    setDirtyMonthIds((prev) => {
+      const next = { ...prev };
+      for (const mId of targetMonthIds) {
+        const cur = getResolvedMonthInput(mId);
+        if (
+          cur.asa1Cases > 0 ||
+          cur.asa2Cases > 0 ||
+          cur.asa3Cases > 0 ||
+          cur.asa4Cases > 0 ||
+          cur.asa5Cases > 0 ||
+          cur.gaCases > 0 ||
+          cur.gaComplexCases > 0 ||
+          cur.regionalCases > 0 ||
+          cur.macCases > 0 ||
+          cur.clinicVisitCases > 0
+        ) {
+          next[mId] = true;
+        }
+      }
+      return next;
+    });
+    setSavedBanner('');
+    setSaveError('');
+  };
+
+  const handleSaveSingleMonth = async (targetMonthId: string) => {
+    const payload = getResolvedMonthInput(targetMonthId);
+    setSavingMonthId(targetMonthId);
+    setSaveError('');
+    try {
+      const saved = await saveMonthProductivity(targetMonthId, payload);
+      applySavedMonthToLocalState(targetMonthId, saved);
+      const { yearAD: mYear, monthNumber: mNum } = parseMonthId(targetMonthId);
+      const label = getThaiMonthYearLabel(mYear, mNum);
+      setSavedBanner(`บันทึกข้อมูลเดือน ${label} และอัปเดตสรุป 12 เดือนแล้ว`);
+      if (targetMonthId === month.monthId) {
+        setSavedNotice(true);
+        window.setTimeout(() => setSavedNotice(false), 3000);
+      }
+      window.setTimeout(() => setSavedBanner(''), 3500);
+    } catch {
+      setSaveError('ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
     } finally {
-      setSaving(false);
+      setSavingMonthId(null);
     }
   };
 
+  const handleSaveAllDirty = async () => {
+    const dirtyIds = Object.keys(dirtyMonthIds).filter((id) => dirtyMonthIds[id]);
+    if (dirtyIds.length === 0) return;
+    setSavingAll(true);
+    setSaveError('');
+    try {
+      const results = await Promise.all(
+        dirtyIds.map(async (mId) => {
+          const saved = await saveMonthProductivity(mId, getResolvedMonthInput(mId));
+          return { monthId: mId, saved };
+        }),
+      );
+      results.forEach(({ monthId: mId, saved }) => {
+        applySavedMonthToLocalState(mId, saved);
+      });
+      setSavedBanner(`บันทึกข้อมูล Productivity ครบ ${results.length} เดือน และเชื่อมสรุป 12 เดือนแล้ว`);
+      window.setTimeout(() => setSavedBanner(''), 3500);
+    } catch {
+      setSaveError('เกิดข้อผิดพลาดระหว่างบันทึกบางเดือน กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setSavingAll(false);
+    }
+  };
+
+  const handleSaveProductivity = async () => {
+    await handleSaveSingleMonth(month.monthId);
+  };
+
   const handleResetDefaultWeights = () => {
-    setDraft((prev) => ({
+    const targetMonthId = month.monthId;
+    setGlobalOptions((prev) => ({
       ...prev,
       hoursPerShift: DEFAULT_ANESTHESIA_PRODUCTIVITY.hoursPerShift,
       reliefFactor: DEFAULT_ANESTHESIA_PRODUCTIVITY.reliefFactor,
-      asa1HoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.asa1HoursPerCase,
-      asa2HoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.asa2HoursPerCase,
-      asa3HoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.asa3HoursPerCase,
-      asa4HoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.asa4HoursPerCase,
-      asa5HoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.asa5HoursPerCase,
-      gaHoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.gaHoursPerCase,
-      gaComplexHoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.gaComplexHoursPerCase,
-      regionalHoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.regionalHoursPerCase,
-      macHoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.macHoursPerCase,
-      clinicVisitHoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.clinicVisitHoursPerCase,
     }));
-    setHasUnsavedChanges(true);
+    setDraftsByMonthId((prev) => {
+      const current = prev[targetMonthId] || getResolvedMonthInput(targetMonthId);
+      return {
+        ...prev,
+        [targetMonthId]: {
+          ...current,
+          hoursPerShift: DEFAULT_ANESTHESIA_PRODUCTIVITY.hoursPerShift,
+          reliefFactor: DEFAULT_ANESTHESIA_PRODUCTIVITY.reliefFactor,
+          asa1HoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.asa1HoursPerCase,
+          asa2HoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.asa2HoursPerCase,
+          asa3HoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.asa3HoursPerCase,
+          asa4HoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.asa4HoursPerCase,
+          asa5HoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.asa5HoursPerCase,
+          gaHoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.gaHoursPerCase,
+          gaComplexHoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.gaComplexHoursPerCase,
+          regionalHoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.regionalHoursPerCase,
+          macHoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.macHoursPerCase,
+          clinicVisitHoursPerCase: DEFAULT_ANESTHESIA_PRODUCTIVITY.clinicVisitHoursPerCase,
+        },
+      };
+    });
+    setDirtyMonthIds((prev) => ({ ...prev, [targetMonthId]: true }));
     setSavedNotice(false);
+    setSavedBanner('');
   };
 
   const analysis = useMemo(
@@ -238,14 +477,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         settings,
         monthsById: yearlyMonthsById,
         entriesByMonthId: yearlyEntriesByMonthId,
-        globalOptions: {
-          staffScope: draft.staffScope,
-          hoursPerShift: draft.hoursPerShift,
-          reliefFactor: draft.reliefFactor,
-          includeWorkloadInOt: draft.includeWorkloadInOt,
-          includeSmcInOt: draft.includeSmcInOt,
-          includeStandbyInHours: draft.includeStandbyInHours,
-        },
+        globalOptions,
+        draftsByMonthId,
         liveActiveMonth: month,
         liveActiveEntries: entriesByStaffId,
         liveActiveDraft: draft,
@@ -257,9 +490,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       settings,
       yearlyMonthsById,
       yearlyEntriesByMonthId,
-      draft,
+      globalOptions,
+      draftsByMonthId,
       month,
       entriesByStaffId,
+      draft,
     ],
   );
 
@@ -454,25 +689,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           yearAD={selectedYearAD}
           yearType={yearType}
           activeMonthId={month.monthId}
-          activeStaff={activeStaff}
           settings={settings}
-          monthsById={yearlyMonthsById}
-          entriesByMonthId={yearlyEntriesByMonthId}
-          liveActiveMonth={month}
-          liveActiveEntries={entriesByStaffId}
-          globalOptions={{
-            staffScope: draft.staffScope,
-            hoursPerShift: draft.hoursPerShift,
-            reliefFactor: draft.reliefFactor,
-            includeWorkloadInOt: draft.includeWorkloadInOt,
-            includeSmcInOt: draft.includeSmcInOt,
-            includeStandbyInHours: draft.includeStandbyInHours,
-          }}
+          yearlySummary={yearlySummary}
+          resolvedInputsByMonthId={resolvedInputsByMonthId}
+          dirtyMonthIds={dirtyMonthIds}
+          globalOptions={globalOptions}
           loading={yearlyLoading}
+          savingMonthId={savingMonthId}
+          savingAll={savingAll}
+          savedBanner={savedBanner}
+          saveError={saveError}
           onChangeYearType={handleChangeYearType}
           onChangeYearAD={setSelectedYearAD}
           onChangeGlobalReliefFactor={(factor) => updateField('reliefFactor', factor)}
-          onMonthProductivitySaved={handleMonthProductivitySaved}
+          onUpdateMonthField={handleUpdateGridMonthField}
+          onApplySharedWeights={handleApplySharedWeights}
+          onSaveSingleMonth={(mId) => void handleSaveSingleMonth(mId)}
+          onSaveAllDirty={() => void handleSaveAllDirty()}
+          onViewYearlyProductivityChart={handleViewYearlyProductivityChart}
           onOpenMonthDetail={handleOpenMonthDetail}
           onPrintA4={onPrintA4}
         />
@@ -484,12 +718,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           loading={yearlyLoading}
           yearType={yearType}
           yearAD={selectedYearAD}
-          hoursPerShift={draft.hoursPerShift}
-          reliefFactor={draft.reliefFactor}
-          staffScope={draft.staffScope}
+          hoursPerShift={globalOptions.hoursPerShift}
+          reliefFactor={globalOptions.reliefFactor}
+          staffScope={globalOptions.staffScope}
+          chartMetric={yearlyChartMetric}
+          dirtyMonthIds={dirtyMonthIds}
+          savingAll={savingAll}
+          onChangeChartMetric={setYearlyChartMetric}
           onChangeYearType={handleChangeYearType}
           onChangeYearAD={setSelectedYearAD}
           onRefresh={() => void loadYearlyData()}
+          onSaveAllDirty={() => void handleSaveAllDirty()}
+          onOpenMonthlyEntry={() => setDashboardTab('monthly-entry')}
           onOpenMonthDetail={handleOpenMonthDetail}
           onPrintA4={onPrintA4}
         />
@@ -1348,20 +1588,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               {/* Save Action Bar */}
               <div className="no-print pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={handleResetDefaultWeights}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  คืนค่ามาตรฐานกองการพยาบาล
-                </button>
+                <div className="flex flex-wrap items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={handleResetDefaultWeights}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    คืนค่ามาตรฐานกองการพยาบาล
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleViewYearlyProductivityChart}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-teal-800 hover:text-teal-950 hover:underline underline-offset-2 cursor-pointer"
+                  >
+                    ดูสรุป Productivity 12 เดือน →
+                  </button>
+                </div>
 
                 <div className="flex items-center gap-3">
+                  {saveError && (
+                    <span className="text-xs font-medium text-rose-700">{saveError}</span>
+                  )}
                   {savedNotice && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
                       <Check className="w-4 h-4" />
-                      บันทึกข้อมูลเดือน {monthLabel} แล้ว
+                      บันทึกเดือน {monthLabel} และเชื่อม 12 เดือนแล้ว
                     </span>
                   )}
                   <button

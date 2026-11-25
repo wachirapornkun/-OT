@@ -754,6 +754,7 @@ export function calculateYearlyMonthlyBreakdown(params: {
     | 'includeSmcInOt'
     | 'includeStandbyInHours'
   >;
+  draftsByMonthId?: Record<string, AnesthesiaProductivityInput>;
   liveActiveMonth?: RosterMonth;
   liveActiveEntries?: Record<string, MonthlyShiftEntry>;
   liveActiveDraft?: AnesthesiaProductivityInput;
@@ -766,6 +767,7 @@ export function calculateYearlyMonthlyBreakdown(params: {
     monthsById,
     entriesByMonthId,
     globalOptions,
+    draftsByMonthId,
     liveActiveMonth,
     liveActiveEntries,
     liveActiveDraft,
@@ -797,19 +799,23 @@ export function calculateYearlyMonthlyBreakdown(params: {
 
     const entriesMap = isLive && liveActiveEntries ? liveActiveEntries : entriesByMonthId[monthId] || {};
 
-    // Combine month's saved workload counts with the dashboard's current global basis toggles
-    const monthInput: AnesthesiaProductivityInput =
-      isLive && liveActiveDraft
-        ? liveActiveDraft
-        : {
-            ...resolveProductivityInput(baseMonth),
-            staffScope: globalOptions.staffScope,
-            hoursPerShift: globalOptions.hoursPerShift,
-            reliefFactor: globalOptions.reliefFactor,
-            includeWorkloadInOt: globalOptions.includeWorkloadInOt,
-            includeSmcInOt: globalOptions.includeSmcInOt,
-            includeStandbyInHours: globalOptions.includeStandbyInHours,
-          };
+    // Combine live/unsaved monthly productivity draft (if any) with saved month data & current global basis toggles
+    const draftOverride = draftsByMonthId?.[monthId];
+    const baseProd = draftOverride
+      ? draftOverride
+      : isLive && liveActiveDraft
+      ? liveActiveDraft
+      : resolveProductivityInput(baseMonth);
+
+    const monthInput: AnesthesiaProductivityInput = {
+      ...baseProd,
+      staffScope: globalOptions.staffScope,
+      hoursPerShift: globalOptions.hoursPerShift,
+      reliefFactor: globalOptions.reliefFactor,
+      includeWorkloadInOt: globalOptions.includeWorkloadInOt,
+      includeSmcInOt: globalOptions.includeSmcInOt,
+      includeStandbyInHours: globalOptions.includeStandbyInHours,
+    };
 
     const summaries = activeStaff.map((staff) =>
       calculatePersonMonthlySummary(staff, entriesMap[staff.staffId] || null, baseMonth, settings),

@@ -800,3 +800,30 @@ export async function fetchYearlyMonthsAndEntries(monthIds: string[]): Promise<{
   }
 }
 
+/**
+ * Real-time subscription to all department RosterMonth documents so monthly Productivity
+ * edits saved in any tab immediately sync with the 12-month summary and charts.
+ */
+export function subscribeDepartmentMonths(
+  onData: (monthsById: Record<string, RosterMonth>) => void,
+): Unsubscribe {
+  const path = 'months';
+  const q = query(collection(db, 'months'), where('visibility', '==', 'department'));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const map: Record<string, RosterMonth> = {};
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data() as RosterMonth;
+        const id = data.monthId || docSnap.id;
+        map[id] = data;
+      });
+      onData(map);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    },
+  );
+}
+
+

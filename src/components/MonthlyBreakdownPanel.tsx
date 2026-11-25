@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -6,6 +6,8 @@ import {
   ExternalLink,
   Printer,
   RefreshCw,
+  Save,
+  Table2,
 } from 'lucide-react';
 import { DepartmentSettings } from '../types/roster';
 import {
@@ -17,6 +19,8 @@ import {
 } from '../utils/dashboardCalculations';
 import { formatCurrency } from '../utils/thaiUtils';
 
+export type YearlyChartMetric = 'shiftMix' | 'otShifts' | 'otFte' | 'productivity';
+
 interface MonthlyBreakdownPanelProps {
   summary: YearlyDashboardSummary;
   settings: DepartmentSettings;
@@ -27,14 +31,18 @@ interface MonthlyBreakdownPanelProps {
   hoursPerShift: number;
   reliefFactor: number;
   staffScope: 'RN' | 'ALL';
+  chartMetric: YearlyChartMetric;
+  dirtyMonthIds?: Record<string, boolean>;
+  savingAll?: boolean;
+  onChangeChartMetric: (metric: YearlyChartMetric) => void;
   onChangeYearType: (type: YearRangeType) => void;
   onChangeYearAD: (yearAD: number) => void;
   onRefresh: () => void;
+  onSaveAllDirty?: () => void;
+  onOpenMonthlyEntry?: () => void;
   onOpenMonthDetail: (monthId: string) => void;
   onPrintA4?: (title?: string) => void;
 }
-
-type ChartMetric = 'shiftMix' | 'otShifts' | 'otFte' | 'productivity';
 
 function getStatusTextClass(status: ProductivityStatus): string {
   if (status === 'optimal') return 'text-emerald-700';
@@ -67,13 +75,22 @@ export const MonthlyBreakdownPanel: React.FC<MonthlyBreakdownPanelProps> = ({
   hoursPerShift,
   reliefFactor,
   staffScope,
+  chartMetric,
+  dirtyMonthIds = {},
+  savingAll = false,
+  onChangeChartMetric,
   onChangeYearType,
   onChangeYearAD,
   onRefresh,
+  onSaveAllDirty,
+  onOpenMonthlyEntry,
   onOpenMonthDetail,
   onPrintA4,
 }) => {
-  const [chartMetric, setChartMetric] = useState<ChartMetric>('shiftMix');
+  const unsavedCount = useMemo(
+    () => summary.months.filter((m) => dirtyMonthIds[m.monthId]).length,
+    [summary.months, dirtyMonthIds],
+  );
 
   const maxShiftMix = useMemo(
     () =>
@@ -164,6 +181,16 @@ export const MonthlyBreakdownPanel: React.FC<MonthlyBreakdownPanelProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {onOpenMonthlyEntry && (
+            <button
+              type="button"
+              onClick={onOpenMonthlyEntry}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-teal-800 bg-teal-50/70 hover:bg-teal-100/70 border border-teal-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+            >
+              <Table2 className="w-3.5 h-3.5" />
+              กรอก/แก้ไข Productivity
+            </button>
+          )}
           <button
             type="button"
             onClick={() =>
@@ -194,6 +221,24 @@ export const MonthlyBreakdownPanel: React.FC<MonthlyBreakdownPanelProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Live Unsaved Productivity Sync Notice */}
+      {unsavedCount > 0 && onSaveAllDirty && (
+        <div className="no-print bg-amber-50/80 border border-amber-200 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="text-xs text-amber-900">
+            <strong>เชื่อมข้อมูลเรียลไทม์แล้ว:</strong> กราฟและตาราง 12 เดือนด้านล่างกำลังแสดงยอด Productivity ที่เพิ่งกรอก ({unsavedCount} เดือนยังไม่บันทึกลงฐานข้อมูล)
+          </div>
+          <button
+            type="button"
+            disabled={savingAll}
+            onClick={onSaveAllDirty}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg transition-colors whitespace-nowrap self-start sm:self-auto cursor-pointer"
+          >
+            <Save className="w-3.5 h-3.5" />
+            {savingAll ? 'กำลังบันทึก...' : `บันทึกทั้งหมด (${unsavedCount} เดือน)`}
+          </button>
+        </div>
+      )}
 
       {/* Printable 12-Month Report Root */}
       <div className="print-full-width space-y-6">
@@ -315,7 +360,7 @@ export const MonthlyBreakdownPanel: React.FC<MonthlyBreakdownPanelProps> = ({
             <div className="no-print flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start xl:self-auto shrink-0">
               <button
                 type="button"
-                onClick={() => setChartMetric('shiftMix')}
+                onClick={() => onChangeChartMetric('shiftMix')}
                 className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
                   chartMetric === 'shiftMix'
                     ? 'bg-white text-slate-900 shadow-sm'
@@ -326,7 +371,7 @@ export const MonthlyBreakdownPanel: React.FC<MonthlyBreakdownPanelProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setChartMetric('otShifts')}
+                onClick={() => onChangeChartMetric('otShifts')}
                 className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
                   chartMetric === 'otShifts'
                     ? 'bg-white text-slate-900 shadow-sm'
@@ -337,7 +382,7 @@ export const MonthlyBreakdownPanel: React.FC<MonthlyBreakdownPanelProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setChartMetric('otFte')}
+                onClick={() => onChangeChartMetric('otFte')}
                 className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
                   chartMetric === 'otFte'
                     ? 'bg-white text-slate-900 shadow-sm'
@@ -348,7 +393,7 @@ export const MonthlyBreakdownPanel: React.FC<MonthlyBreakdownPanelProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setChartMetric('productivity')}
+                onClick={() => onChangeChartMetric('productivity')}
                 className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
                   chartMetric === 'productivity'
                     ? 'bg-white text-teal-800 shadow-sm'
@@ -683,6 +728,11 @@ export const MonthlyBreakdownPanel: React.FC<MonthlyBreakdownPanelProps> = ({
                               · กำลังดู
                             </span>
                           )}
+                          {dirtyMonthIds[m.monthId] && (
+                            <span className="ml-2 text-[11px] font-medium text-amber-700">
+                              · ยังไม่บันทึก
+                            </span>
+                          )}
                         </td>
                         <td className="px-2.5 py-3 text-right font-mono tabular-nums text-slate-600">
                           {m.standardWorkingDays}
@@ -727,6 +777,14 @@ export const MonthlyBreakdownPanel: React.FC<MonthlyBreakdownPanelProps> = ({
                                 ไม่มี OT {m.baselineProductivityWithoutOtPercent.toFixed(0)}%
                               </div>
                             </div>
+                          ) : onOpenMonthlyEntry ? (
+                            <button
+                              type="button"
+                              onClick={onOpenMonthlyEntry}
+                              className="text-xs font-sans text-teal-700 hover:text-teal-900 hover:underline underline-offset-2 cursor-pointer"
+                            >
+                              + กรอกเคส
+                            </button>
                           ) : (
                             <span className="text-slate-400">ยังไม่กรอก</span>
                           )}
