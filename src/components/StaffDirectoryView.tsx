@@ -1,30 +1,49 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   Database,
   Edit3,
+  Link2,
+  Lock,
   Plus,
+  ShieldCheck,
+  ShieldOff,
   Trash2,
+  Unlink,
   X,
 } from 'lucide-react';
 import {
   CATEGORY_LABELS,
   StaffCategory,
   StaffMember,
+  UserAccount,
 } from '../types/roster';
 import {
   createStaffMember,
   deleteStaffMember,
+  grantAdminRole,
+  revokeAdminRole,
   seedOctober2569DepartmentData,
+  subscribeAdminUids,
+  subscribeAllUserAccountsAdmin,
+  unlinkStaffProfileAdmin,
   updateStaffMemberAdmin,
 } from '../services/rosterService';
+import { BOOTSTRAPPED_ADMIN_EMAIL } from '../firebase';
+import { getDisplayUsername } from '../utils/authHelpers';
 
 interface StaffDirectoryViewProps {
+  currentUserUid: string;
+  isAdmin: boolean;
+  isBootstrappedAdmin: boolean;
   staffList: StaffMember[];
   onSwitchToOctober2569: () => void;
 }
 
 export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
+  currentUserUid,
+  isAdmin,
+  isBootstrappedAdmin,
   staffList,
   onSwitchToOctober2569,
 }) => {
@@ -33,6 +52,13 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
   const [seeding, setSeeding] = useState(false);
   const [seedDone, setSeedDone] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmUnlinkId, setConfirmUnlinkId] = useState<string | null>(null);
+  const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
+
+  // Bootstrapped Admin account & role management
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>([]);
+  const [adminUids, setAdminUids] = useState<string[]>([]);
+  const [roleBusyUid, setRoleBusyUid] = useState<string | null>(null);
 
   // Add form state
   const [fullName, setFullName] = useState('');
@@ -44,6 +70,38 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
 
   // Edit modal state
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+
+  useEffect(() => {
+    if (!isBootstrappedAdmin) {
+      setUserAccounts([]);
+      setAdminUids([]);
+      return;
+    }
+    const unsubUsers = subscribeAllUserAccountsAdmin(setUserAccounts);
+    const unsubAdmins = subscribeAdminUids(setAdminUids);
+    return () => {
+      unsubUsers();
+      unsubAdmins();
+    };
+  }, [isBootstrappedAdmin]);
+
+  const userAccountByUid = useMemo(() => {
+    const map: Record<string, UserAccount> = {};
+    userAccounts.forEach((u) => {
+      map[u.uid] = u;
+    });
+    return map;
+  }, [userAccounts]);
+
+  const staffById = useMemo(() => {
+    const map: Record<string, StaffMember> = {};
+    staffList.forEach((s) => {
+      map[s.staffId] = s;
+    });
+    return map;
+  }, [staffList]);
+
+  const adminUidSet = useMemo(() => new Set(adminUids), [adminUids]);
 
   const filteredStaff = useMemo(() => {
     if (categoryFilter === 'ALL') return staffList;
@@ -76,7 +134,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
 
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim()) return;
+    if (!isAdmin || !fullName.trim()) return;
     setSubmitting(true);
     try {
       await createStaffMember({
@@ -97,7 +155,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingStaff) return;
+    if (!isAdmin || !editingStaff) return;
     setSubmitting(true);
     try {
       await updateStaffMemberAdmin(editingStaff.staffId, {
@@ -114,11 +172,23 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
     }
   };
 
+  const handleUnlinkStaff = async (staff: StaffMember) => {
+    if (!isAdmin || !staff.ownerUid) return;
+    setUnlinkingId(staff.staffId);
+    try {
+      await unlinkStaffProfileAdmin(staff.staffId, staff.ownerUid);
+      setConfirmUnlinkId(null);
+    } finally {
+      setUnlinkingId(null);
+    }
+  };
+
   const handleSeedSample = async () => {
+    if (!isAdmin) return;
     setSeeding(true);
     setSeedDone(false);
     try {
-      await seedOctober2569DepartmentData('');
+      await seedOctober2569DepartmentData(currentUserUid);
       setSeedDone(true);
       onSwitchToOctober2569();
       setTimeout(() => setSeedDone(false), 4000);
@@ -127,51 +197,81 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
     }
   };
 
+  const handleToggleAdminRole = async (acct: UserAccount, currentlyAdmin: boolean) => {
+    if (!isBootstrappedAdmin) return;
+    if (acct.email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL) return;
+    setRoleBusyUid(acct.uid);
+    try {
+      if (currentlyAdmin) {
+        await revokeAdminRole(acct.uid);
+      } else {
+        await grantAdminRole(acct.uid);
+      }
+    } finally {
+      setRoleBusyUid(null);
+    }
+  };
+
   return (
     <div className="space-y-5">
       {/* Header Toolbar */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="text-lg font-bold text-slate-900">รายชื่อบุคลากรในหน่วยงาน</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-900">รายชื่อบุคลากรในหน่วยงาน</h2>
+            {isAdmin ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-teal-800 bg-teal-50 border border-teal-200 rounded-md">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                สิทธิ์ Admin
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium text-slate-600 bg-slate-100 border border-slate-200 rounded-md">
+                <Lock className="w-3 h-3" />
+                ดูรายชื่อเท่านั้น (จัดการได้เฉพาะ Admin)
+              </span>
+            )}
+          </div>
           <p className="text-xs text-slate-500">
             ทั้งหมด {counts.ALL} คน · พยาบาลวิชาชีพ {counts.RN} · ผู้ช่วยพยาบาล {counts.PN} · พนักงานช่วยเหลือคนไข้ {counts.NA}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-          <button
-            type="button"
-            disabled={seeding}
-            onClick={handleSeedSample}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            {seedDone ? (
-              <Check className="w-3.5 h-3.5 text-green-700" />
-            ) : (
-              <Database className="w-3.5 h-3.5 text-teal-700" />
-            )}
-            {seeding
-              ? 'กำลังนำเข้าข้อมูล...'
-              : seedDone
-              ? 'นำเข้าข้อมูล ต.ค. 2569 แล้ว'
-              : 'นำเข้าข้อมูลตัวอย่าง ต.ค. 2569 (13 คน)'}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setOrderIndex(staffList.length + 1);
-              setShowAddForm((prev) => !prev);
-            }}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            เพิ่มรายชื่อบุคลากร
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              disabled={seeding}
+              onClick={handleSeedSample}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              {seedDone ? (
+                <Check className="w-3.5 h-3.5 text-green-700" />
+              ) : (
+                <Database className="w-3.5 h-3.5 text-teal-700" />
+              )}
+              {seeding
+                ? 'กำลังนำเข้าข้อมูล...'
+                : seedDone
+                ? 'นำเข้าข้อมูล ต.ค. 2569 แล้ว'
+                : 'นำเข้าข้อมูลตัวอย่าง ต.ค. 2569 (13 คน)'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOrderIndex(staffList.length + 1);
+                setShowAddForm((prev) => !prev);
+              }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              เพิ่มรายชื่อบุคลากร
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Inline Add Staff Form */}
-      {showAddForm && (
+      {/* Inline Add Staff Form (Admin Only) */}
+      {isAdmin && showAddForm && (
         <form
           onSubmit={handleAddStaff}
           className="bg-white border border-slate-200 rounded-xl p-5 space-y-4"
@@ -288,15 +388,17 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
         {filteredStaff.length === 0 ? (
           <div className="p-10 text-center space-y-3">
             <p className="text-sm text-slate-600">ยังไม่มีรายชื่อบุคลากรในระบบ</p>
-            <button
-              type="button"
-              onClick={handleSeedSample}
-              disabled={seeding}
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg cursor-pointer"
-            >
-              <Database className="w-4 h-4" />
-              นำเข้าข้อมูลตัวอย่าง กลุ่มงานการพยาบาลวิสัญญี (ต.ค. 2569)
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleSeedSample}
+                disabled={seeding}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg cursor-pointer"
+              >
+                <Database className="w-4 h-4" />
+                นำเข้าข้อมูลตัวอย่าง กลุ่มงานการพยาบาลวิสัญญี (ต.ค. 2569)
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -307,90 +409,259 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
                   <th className="px-4 py-3 text-left">ชื่อ - สกุล</th>
                   <th className="px-4 py-3 text-left">กลุ่มตำแหน่ง</th>
                   <th className="px-4 py-3 text-left">ตำแหน่ง / ระดับ</th>
+                  <th className="px-4 py-3 text-left">การผูกบัญชี Login</th>
                   <th className="px-4 py-3 text-left">สถานะในตาราง</th>
-                  <th className="px-4 py-3 text-right">จัดการ</th>
+                  {isAdmin && <th className="px-4 py-3 text-right">จัดการ</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredStaff.map((s) => (
-                  <tr
-                    key={s.staffId}
-                    className={`hover:bg-slate-50/70 ${!s.active ? 'opacity-55' : ''}`}
-                  >
-                    <td className="px-4 py-3 text-center font-mono text-xs tabular-nums text-slate-600">
-                      {s.orderIndex}
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">
-                      {s.fullName}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-700 whitespace-nowrap">
-                      {CATEGORY_LABELS[s.category]}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-600">
-                      <div className="text-slate-900 font-medium">{s.positionLabel}</div>
-                      {s.positionSubLabel && (
-                        <div className="text-slate-500">{s.positionSubLabel}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs">
-                      {s.active ? (
-                        <span className="text-teal-700 font-medium">แสดงในตารางเวร</span>
-                      ) : (
-                        <span className="text-slate-400">ซ่อนจากตารางเวร</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <div className="inline-flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          title="แก้ไขข้อมูลบุคลากร"
-                          onClick={() => setEditingStaff(s)}
-                          className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-md cursor-pointer"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        {confirmDeleteId === s.staffId ? (
-                          <div className="inline-flex items-center gap-1 ml-1">
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                await deleteStaffMember(s.staffId);
-                                setConfirmDeleteId(null);
-                              }}
-                              className="px-2 py-1 text-[11px] font-semibold text-white bg-red-600 hover:bg-red-700 rounded cursor-pointer"
+                {filteredStaff.map((s) => {
+                  const isMine = Boolean(s.ownerUid && s.ownerUid === currentUserUid);
+                  const linkedAccount = s.ownerUid ? userAccountByUid[s.ownerUid] : undefined;
+                  return (
+                    <tr
+                      key={s.staffId}
+                      className={`hover:bg-slate-50/70 ${!s.active ? 'opacity-55' : ''}`}
+                    >
+                      <td className="px-4 py-3 text-center font-mono text-xs tabular-nums text-slate-600">
+                        {s.orderIndex}
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">
+                        {s.fullName}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-700 whitespace-nowrap">
+                        {CATEGORY_LABELS[s.category]}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600">
+                        <div className="text-slate-900 font-medium">{s.positionLabel}</div>
+                        {s.positionSubLabel && (
+                          <div className="text-slate-500">{s.positionSubLabel}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        {s.ownerUid ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span
+                              className={`inline-flex items-center gap-1 font-medium ${
+                                isMine ? 'text-teal-700' : 'text-slate-700'
+                              }`}
                             >
-                              ยืนยันลบ
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="px-2 py-1 text-[11px] text-slate-600 bg-slate-100 rounded cursor-pointer"
-                            >
-                              ยกเลิก
-                            </button>
+                              <Link2 className="w-3.5 h-3.5 shrink-0" />
+                              {isMine
+                                ? 'บัญชีของคุณ'
+                                : linkedAccount
+                                ? linkedAccount.displayName || getDisplayUsername(linkedAccount.email)
+                                : 'ผูกบัญชีแล้ว'}
+                            </span>
+                            {linkedAccount && !isMine && (
+                              <span className="text-[11px] text-slate-400">
+                                @{getDisplayUsername(linkedAccount.email)}
+                              </span>
+                            )}
                           </div>
                         ) : (
-                          <button
-                            type="button"
-                            title="ลบรายชื่อ"
-                            onClick={() => setConfirmDeleteId(s.staffId)}
-                            className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <span className="text-slate-400">ยังไม่ผูกบัญชี</span>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        {s.active ? (
+                          <span className="text-teal-700 font-medium">แสดงในตารางเวร</span>
+                        ) : (
+                          <span className="text-slate-400">ซ่อนจากตารางเวร</span>
+                        )}
+                      </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5">
+                            {s.ownerUid && (
+                              confirmUnlinkId === s.staffId ? (
+                                <div className="inline-flex items-center gap-1 mr-1">
+                                  <button
+                                    type="button"
+                                    disabled={unlinkingId === s.staffId}
+                                    onClick={() => void handleUnlinkStaff(s)}
+                                    className="px-2 py-1 text-[11px] font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded cursor-pointer disabled:opacity-50"
+                                  >
+                                    ยืนยันปลด
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmUnlinkId(null)}
+                                    className="px-2 py-1 text-[11px] text-slate-600 bg-slate-100 rounded cursor-pointer"
+                                  >
+                                    ยกเลิก
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  title="ปลดการผูกบัญชี Login (ให้เจ้าของเลือกผูกชื่อใหม่ได้)"
+                                  onClick={() => setConfirmUnlinkId(s.staffId)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50 border border-amber-200 rounded-md cursor-pointer"
+                                >
+                                  <Unlink className="w-3 h-3" />
+                                  ปลดผูกบัญชี
+                                </button>
+                              )
+                            )}
+                            <button
+                              type="button"
+                              title="แก้ไขข้อมูลบุคลากร"
+                              onClick={() => setEditingStaff(s)}
+                              className="p-1.5 text-slate-500 hover:text-teal-700 hover:bg-teal-50 rounded-md cursor-pointer"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            {confirmDeleteId === s.staffId ? (
+                              <div className="inline-flex items-center gap-1 ml-1">
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await deleteStaffMember(s.staffId);
+                                    setConfirmDeleteId(null);
+                                  }}
+                                  className="px-2 py-1 text-[11px] font-semibold text-white bg-red-600 hover:bg-red-700 rounded cursor-pointer"
+                                >
+                                  ยืนยันลบ
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteId(null)}
+                                  className="px-2 py-1 text-[11px] text-slate-600 bg-slate-100 rounded cursor-pointer"
+                                >
+                                  ยกเลิก
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                title="ลบรายชื่อ"
+                                onClick={() => setConfirmDeleteId(s.staffId)}
+                                className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* Edit Staff Modal */}
-      {editingStaff && (
+      {/* Bootstrapped Admin Only: Manage Admin Privileges for Registered Users */}
+      {isBootstrappedAdmin && userAccounts.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-teal-700" />
+                จัดการสิทธิ์ผู้ดูแลระบบ (Admin)
+              </h3>
+              <p className="text-xs text-slate-500">
+                บัญชีที่ได้สิทธิ์ Admin จะสามารถลงและแก้ไขเวรแทนบุคลากรทุกคนได้ รวมถึงปลดการผูกบัญชีเมื่อมีคนเลือกชื่อผิด
+              </p>
+            </div>
+            <span className="text-xs text-slate-500 whitespace-nowrap">
+              {userAccounts.length} บัญชีที่ลงทะเบียน
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                  <th className="px-4 py-2.5 text-left">ชื่อที่แสดง / บัญชี Login</th>
+                  <th className="px-4 py-2.5 text-left">ผูกกับรายชื่อบุคลากร</th>
+                  <th className="px-4 py-2.5 text-left">สิทธิ์ปัจจุบัน</th>
+                  <th className="px-4 py-2.5 text-right">เปลี่ยนสิทธิ์</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {userAccounts.map((acct) => {
+                  const isMainAdmin = acct.email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL;
+                  const isDelegatedAdmin = adminUidSet.has(acct.uid);
+                  const effectiveAdmin = isMainAdmin || isDelegatedAdmin;
+                  const boundStaff = acct.linkedStaffId ? staffById[acct.linkedStaffId] : undefined;
+                  const actuallyOwnedStaff =
+                    boundStaff && boundStaff.ownerUid === acct.uid
+                      ? boundStaff
+                      : staffList.find((s) => s.ownerUid === acct.uid);
+                  return (
+                    <tr key={acct.uid} className="hover:bg-slate-50/70">
+                      <td className="px-4 py-2.5">
+                        <div className="font-semibold text-slate-900">
+                          {acct.displayName || getDisplayUsername(acct.email)}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          @{getDisplayUsername(acct.email)}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-700">
+                        {actuallyOwnedStaff ? (
+                          <span className="font-medium">{actuallyOwnedStaff.fullName}</span>
+                        ) : (
+                          <span className="text-slate-400">ยังไม่ผูกชื่อ</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {isMainAdmin ? (
+                          <span className="inline-flex items-center gap-1 font-semibold text-teal-800">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Admin หลัก
+                          </span>
+                        ) : isDelegatedAdmin ? (
+                          <span className="inline-flex items-center gap-1 font-semibold text-teal-700">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Admin
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">ผู้ใช้ทั่วไป (ลงเวรเฉพาะตนเอง)</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        {isMainAdmin ? (
+                          <span className="text-[11px] text-slate-400">สิทธิ์หลักถาวร</span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={roleBusyUid === acct.uid}
+                            onClick={() => void handleToggleAdminRole(acct, effectiveAdmin)}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-md border transition-colors cursor-pointer disabled:opacity-50 ${
+                              effectiveAdmin
+                                ? 'text-rose-700 bg-rose-50 hover:bg-rose-100 border-rose-200'
+                                : 'text-teal-800 bg-teal-50 hover:bg-teal-100 border-teal-200'
+                            }`}
+                          >
+                            {effectiveAdmin ? (
+                              <>
+                                <ShieldOff className="w-3 h-3" />
+                                ยกเลิก Admin
+                              </>
+                            ) : (
+                              <>
+                                <ShieldCheck className="w-3 h-3" />
+                                ตั้งเป็น Admin
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Staff Modal (Admin Only) */}
+      {isAdmin && editingStaff && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
           <form
             onSubmit={handleSaveEdit}

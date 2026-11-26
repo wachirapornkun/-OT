@@ -14,6 +14,8 @@ import { getDaysInMonth, getThaiMonthYearLabel } from '../utils/thaiUtils';
 import { ShiftCellDisplay } from './ShiftCellDisplay';
 
 interface SmcRosterViewProps {
+  currentUserUid: string;
+  isAdmin: boolean;
   month: RosterMonth;
   settings: DepartmentSettings;
   summaries: PersonMonthlySummary[];
@@ -33,6 +35,8 @@ interface EditingSmcCellState {
 const SMC_CODE_OPTIONS: SmcShiftCode[] = ['SMC'];
 
 export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
+  currentUserUid,
+  isAdmin,
   month,
   settings,
   summaries,
@@ -155,7 +159,8 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
     return filteredSummaries.reduce((acc, s) => acc + s.smcCount, 0);
   }, [filteredSummaries]);
 
-  const editable = month.status === 'open';
+  const canEditStaffRow = (ownerUid: string) =>
+    isAdmin || (month.status === 'open' && ownerUid === currentUserUid);
 
   const handleToggleHoliday = async (day: number) => {
     const nextHolidays = holidaySet.has(day)
@@ -167,7 +172,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
   const handleApplyCellEdit = async (newValue: string) => {
     if (!editingCell) return;
     const targetSummary = summaries.find((s) => s.staff.staffId === editingCell.staffId);
-    if (!targetSummary) return;
+    if (!targetSummary || !canEditStaffRow(targetSummary.staff.ownerUid)) return;
 
     setSavingCell(true);
     try {
@@ -293,9 +298,11 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
           </span>
         </div>
         <span className="text-slate-500">
-          {editable
-            ? 'คลิกเลขวันที่หัวตารางเพื่อสลับวันหยุด · คลิกที่ช่องใดก็ได้เพื่อแก้ไขเวร SMC โดยตรง'
-            : 'เดือนนี้ถูกล็อกแล้ว (ปลดล็อกได้ในเมนูตั้งค่าหากต้องการแก้ไข)'}
+          {isAdmin
+            ? 'สิทธิ์ Admin: คลิกเลขวันที่หัวตารางเพื่อสลับวันหยุด · คลิกแก้ไขเวร SMC ได้ทุกคน'
+            : month.status === 'open'
+            ? 'สิทธิ์ผู้ใช้ทั่วไป: ดูตารางทั้งแผนกได้ และคลิกแก้ไขได้เฉพาะแถวชื่อของตนเองเท่านั้น'
+            : 'เดือนนี้ถูกล็อกแล้ว (ปลดล็อกได้โดย Admin)'}
         </span>
       </div>
 
@@ -392,6 +399,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
               </thead>
               <tbody>
                 {filteredSummaries.map((s, idx) => {
+                  const rowEditable = canEditStaffRow(s.staff.ownerUid);
                   const isHighlighted = Boolean(
                     highlightStaffId && s.staff.staffId === highlightStaffId,
                   );
@@ -425,11 +433,11 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                               </div>
                             )}
                           </div>
-                          {onEditStaffShifts && (
+                          {onEditStaffShifts && rowEditable && (
                             <button
                               type="button"
                               onClick={() => onEditStaffShifts(s.staff.staffId)}
-                              title="กลับไปแก้ไขเวรของบุคคลนี้"
+                              title={isAdmin ? 'กลับไปแก้ไขเวรของบุคคลนี้' : 'กลับไปแก้ไขเวรของฉัน'}
                               className="no-print inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium text-purple-700 hover:bg-purple-100 rounded transition-colors cursor-pointer shrink-0"
                             >
                               <Pencil className="w-2.5 h-2.5" />
@@ -449,7 +457,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                           <td
                             key={d}
                             onClick={() =>
-                              editable &&
+                              rowEditable &&
                               setEditingCell({
                                 staffId: s.staff.staffId,
                                 staffName: s.staff.fullName,
@@ -460,7 +468,7 @@ export const SmcRosterView: React.FC<SmcRosterViewProps> = ({
                             }
                             className={`border border-slate-500 px-0.5 py-1.5 ${
                               isHol ? 'bg-slate-100/70' : ''
-                            } ${editable ? 'cursor-pointer hover:bg-purple-50' : ''}`}
+                            } ${rowEditable ? 'cursor-pointer hover:bg-purple-50' : ''}`}
                           >
                             <ShiftCellDisplay
                               rowKey="smcShifts"

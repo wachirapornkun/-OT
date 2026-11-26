@@ -53,6 +53,8 @@ import {
 } from './MonthlyProductivityEntryGrid';
 
 interface DashboardViewProps {
+  currentUserUid: string;
+  isAdmin: boolean;
   month: RosterMonth;
   settings: DepartmentSettings;
   summaries: PersonMonthlySummary[];
@@ -73,6 +75,8 @@ const CATEGORY_BAR_COLORS: Record<
 };
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
+  currentUserUid,
+  isAdmin,
   month,
   settings,
   summaries,
@@ -1924,7 +1928,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           {idx + 1}
                         </td>
                         <td className="px-4 py-2.5 font-medium text-slate-900 whitespace-nowrap">
-                          {onEditStaffShifts ? (
+                          {onEditStaffShifts && (isAdmin || s.staff.ownerUid === currentUserUid) ? (
                             <button
                               type="button"
                               onClick={() => onEditStaffShifts(s.staff.staffId)}

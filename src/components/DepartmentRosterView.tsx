@@ -17,6 +17,8 @@ import { getDayOfWeek, getDaysInMonth, getThaiMonthYearLabel } from '../utils/th
 import { ShiftCellDisplay } from './ShiftCellDisplay';
 
 interface DepartmentRosterViewProps {
+  currentUserUid: string;
+  isAdmin: boolean;
   month: RosterMonth;
   settings: DepartmentSettings;
   summaries: PersonMonthlySummary[];
@@ -37,6 +39,8 @@ interface EditingCellState {
 }
 
 export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
+  currentUserUid,
+  isAdmin,
   month,
   settings,
   summaries,
@@ -157,7 +161,8 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
     });
   }, [summaries, categoryFilter, searchText]);
 
-  const canEditStaffRow = () => month.status === 'open';
+  const canEditStaffRow = (ownerUid: string) =>
+    isAdmin || (month.status === 'open' && ownerUid === currentUserUid);
 
   const handleToggleHoliday = async (day: number) => {
     const nextHolidays = holidaySet.has(day)
@@ -169,7 +174,7 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
   const handleApplyCellEdit = async (newValue: string) => {
     if (!editingCell) return;
     const targetSummary = summaries.find((s) => s.staff.staffId === editingCell.staffId);
-    if (!targetSummary) return;
+    if (!targetSummary || !canEditStaffRow(targetSummary.staff.ownerUid)) return;
 
     setSavingCell(true);
     try {
@@ -322,9 +327,11 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
           )}
         </div>
         <span className="text-slate-500">
-          {month.status === 'open'
-            ? 'คลิกเลขวันที่หัวตารางเพื่อสลับวันหยุด · คลิกที่ช่องใดก็ได้เพื่อแก้ไขเวรโดยตรง'
-            : 'เดือนนี้ถูกล็อกแล้ว (ปลดล็อกได้ในเมนูตั้งค่าหากต้องการแก้ไข)'}
+          {isAdmin
+            ? 'สิทธิ์ Admin: คลิกเลขวันที่หัวตารางเพื่อสลับวันหยุด · คลิกแก้ไขเวรได้ทุกคน'
+            : month.status === 'open'
+            ? 'สิทธิ์ผู้ใช้ทั่วไป: ดูตารางทั้งแผนกได้ และคลิกแก้ไขได้เฉพาะแถวชื่อของตนเองเท่านั้น'
+            : 'เดือนนี้ถูกล็อกแล้ว (ปลดล็อกได้โดย Admin)'}
         </span>
       </div>
 
@@ -433,7 +440,7 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
               </thead>
               <tbody>
                 {filteredSummaries.map((s, idx) => {
-                  const editable = canEditStaffRow();
+                  const editable = canEditStaffRow(s.staff.ownerUid);
                   const isHighlighted = Boolean(highlightStaffId && s.staff.staffId === highlightStaffId);
                   const hasPublicHolidayRow = s.explicitPublicHolidayCount > 0;
                   return (
@@ -456,11 +463,11 @@ export const DepartmentRosterView: React.FC<DepartmentRosterViewProps> = ({
                         >
                           <div className="flex items-center justify-between gap-1.5">
                             <span>{s.staff.fullName}</span>
-                            {onEditStaffShifts && (
+                            {onEditStaffShifts && editable && (
                               <button
                                 type="button"
                                 onClick={() => onEditStaffShifts(s.staff.staffId)}
-                                title="กลับไปแก้ไขเวรของบุคคลนี้"
+                                title={isAdmin ? 'กลับไปแก้ไขเวรของบุคคลนี้' : 'กลับไปแก้ไขเวรของฉัน'}
                                 className="no-print inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium text-teal-700 hover:bg-teal-100 rounded transition-colors cursor-pointer"
                               >
                                 <Pencil className="w-2.5 h-2.5" />

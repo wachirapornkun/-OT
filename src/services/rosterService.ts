@@ -68,11 +68,14 @@ export function cleanShiftMap<T extends string>(
   return result;
 }
 
-export async function checkIsAdmin(uid: string, email: string | null): Promise<boolean> {
-  if (email && email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL) {
+export async function checkIsAdmin(
+  uid: string,
+  email: string | null,
+  emailVerified = false,
+): Promise<boolean> {
+  if (emailVerified && email && email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL) {
     return true;
   }
-  const path = `admins/${uid}`;
   try {
     const snap = await getDoc(doc(db, 'admins', uid));
     return snap.exists();
@@ -80,6 +83,112 @@ export async function checkIsAdmin(uid: string, email: string | null): Promise<b
     // Non-admin read of non-existent doc still allowed for own uid; treat permission error safely
     console.warn('Admin check fallback:', error);
     return false;
+  }
+}
+
+export function subscribeIsAdmin(
+  uid: string,
+  email: string | null,
+  emailVerified: boolean,
+  onChange: (isAdmin: boolean) => void,
+): Unsubscribe {
+  if (emailVerified && email && email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL) {
+    onChange(true);
+    return () => {};
+  }
+  return onSnapshot(
+    doc(db, 'admins', uid),
+    (snap) => {
+      onChange(snap.exists());
+    },
+    (error) => {
+      console.warn('Admin subscription fallback:', error);
+      onChange(false);
+    },
+  );
+}
+
+export function subscribeAllUserAccountsAdmin(
+  onData: (accounts: UserAccount[]) => void,
+): Unsubscribe {
+  const path = 'userAccounts';
+  return onSnapshot(
+    collection(db, 'userAccounts'),
+    (snapshot) => {
+      const list: UserAccount[] = snapshot.docs.map((d) => {
+        const raw = d.data() as Partial<UserAccount>;
+        return {
+          uid: raw.uid || d.id,
+          email: raw.email || '',
+          displayName: raw.displayName || '',
+          linkedStaffId: raw.linkedStaffId || '',
+          role: raw.role === 'admin' ? 'admin' : 'staff',
+        };
+      });
+      list.sort((a, b) => (a.displayName || a.email).localeCompare(b.displayName || b.email, 'th'));
+      onData(list);
+    },
+    (error) => {
+      console.warn('Unable to list user accounts:', error);
+      onData([]);
+      void path;
+    },
+  );
+}
+
+export function subscribeAdminUids(onData: (adminUids: string[]) => void): Unsubscribe {
+  return onSnapshot(
+    collection(db, 'admins'),
+    (snapshot) => {
+      onData(snapshot.docs.map((d) => d.id));
+    },
+    (error) => {
+      console.warn('Unable to list admin UIDs:', error);
+      onData([]);
+    },
+  );
+}
+
+export async function grantAdminRole(targetUid: string): Promise<void> {
+  const cleanUid = sanitizeId(targetUid, 128);
+  const path = `admins/${cleanUid}`;
+  try {
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'admins', cleanUid), {
+      uid: cleanUid,
+      createdAt: serverTimestamp(),
+    });
+    const acctRef = doc(db, 'userAccounts', cleanUid);
+    const acctSnap = await getDoc(acctRef);
+    if (acctSnap.exists()) {
+      batch.update(acctRef, {
+        role: 'admin',
+        updatedAt: serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function revokeAdminRole(targetUid: string): Promise<void> {
+  const cleanUid = sanitizeId(targetUid, 128);
+  const path = `admins/${cleanUid}`;
+  try {
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'admins', cleanUid));
+    const acctRef = doc(db, 'userAccounts', cleanUid);
+    const acctSnap = await getDoc(acctRef);
+    if (acctSnap.exists()) {
+      batch.update(acctRef, {
+        role: 'staff',
+        updatedAt: serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
@@ -324,14 +433,127 @@ export async function updateStaffMemberAdmin(
   }
 }
 
-export async function claimStaffProfile(staffId: string, uid: string): Promise<void> {
-  const path = `staff/${staffId}`;
+/**
+ * Atomically binds an unclaimed staff profile to the signed-in user's account
+ * so each regular login can edit ONLY their own shifts.
+ */
+export async function claimStaffProfile(
+  staffId: string,
+  uid: string,
+  accountFallback?: { email: string; displayName: string },
+): Promise<void> {
+  const cleanStaffId = sanitizeId(staffId, 64);
+  const cleanUid = sanitizeId(uid, 128);
+  const path = `staff/${cleanStaffId}`;
   try {
-    await updateDoc(doc(db, 'staff', staffId), {
-      ownerUid: sanitizeId(uid, 128),
+    const acctRef = doc(db, 'userAccounts', cleanUid);
+    const acctSnap = await getDoc(acctRef);
+    if (!acctSnap.exists()) {
+      await ensureUserAccount({
+        uid: cleanUid,
+        email: accountFallback?.email || `${cleanUid}@bangphli.local`,
+        displayName: accountFallback?.displayName || 'ผู้ใช้งาน',
+        isAdmin: false,
+      });
+    }
+
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'staff', cleanStaffId), {
+      ownerUid: cleanUid,
       updatedAt: serverTimestamp(),
     });
-    await updateUserLinkedStaffId(uid, staffId);
+    batch.update(acctRef, {
+      linkedStaffId: cleanStaffId,
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+/**
+ * Atomically creates a new staff profile owned by the signed-in regular user
+ * and binds their userAccount to it in a single Firestore batch.
+ */
+export async function createOwnStaffProfile(
+  input: {
+    fullName: string;
+    category: StaffCategory;
+    positionLabel: string;
+    positionSubLabel: string;
+    orderIndex: number;
+  },
+  uid: string,
+  accountFallback?: { email: string; displayName: string },
+): Promise<string> {
+  const cleanUid = sanitizeId(uid, 128);
+  const staffId = sanitizeId(`${input.category.toLowerCase()}_${Date.now().toString(36)}`, 64);
+  const path = `staff/${staffId}`;
+  try {
+    const acctRef = doc(db, 'userAccounts', cleanUid);
+    const acctSnap = await getDoc(acctRef);
+    if (!acctSnap.exists()) {
+      await ensureUserAccount({
+        uid: cleanUid,
+        email: accountFallback?.email || `${cleanUid}@bangphli.local`,
+        displayName: accountFallback?.displayName || input.fullName.trim() || 'ผู้ใช้งาน',
+        isAdmin: false,
+      });
+    }
+
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'staff', staffId), {
+      staffId,
+      orderIndex: Math.max(1, Math.min(999, Math.round(input.orderIndex || 1))),
+      fullName: input.fullName.trim().slice(0, 120),
+      category: input.category,
+      positionLabel: input.positionLabel.trim().slice(0, 100),
+      positionSubLabel: input.positionSubLabel.trim().slice(0, 120),
+      ownerUid: cleanUid,
+      active: true,
+      visibility: 'department',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    batch.update(acctRef, {
+      linkedStaffId: staffId,
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+    return staffId;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+/**
+ * Admin-only: unlinks a staff profile from its bound user account so the user can re-bind.
+ */
+export async function unlinkStaffProfileAdmin(
+  staffId: string,
+  previousOwnerUid: string,
+): Promise<void> {
+  const cleanStaffId = sanitizeId(staffId, 64);
+  const path = `staff/${cleanStaffId}`;
+  try {
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'staff', cleanStaffId), {
+      ownerUid: '',
+      updatedAt: serverTimestamp(),
+    });
+    if (previousOwnerUid) {
+      const cleanPrevUid = sanitizeId(previousOwnerUid, 128);
+      const acctRef = doc(db, 'userAccounts', cleanPrevUid);
+      const acctSnap = await getDoc(acctRef);
+      if (acctSnap.exists() && acctSnap.data()?.linkedStaffId === cleanStaffId) {
+        batch.update(acctRef, {
+          linkedStaffId: '',
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }

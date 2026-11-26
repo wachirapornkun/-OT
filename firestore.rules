@@ -32,7 +32,31 @@ service cloud.firestore {
 
     function isAdmin() {
       return isBootstrappedAdmin()
-        || (isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+        || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function hasUserAccount() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/userAccounts/$(request.auth.uid));
+    }
+
+    function currentUserLinkedStaffId() {
+      return get(/databases/$(database)/documents/userAccounts/$(request.auth.uid)).data.linkedStaffId;
+    }
+
+    // True iff the signed-in user currently owns a valid staff profile via linkedStaffId <-> staff.ownerUid
+    function hasClaimedStaff() {
+      return hasUserAccount()
+        && currentUserLinkedStaffId() is string
+        && currentUserLinkedStaffId().size() > 0
+        && exists(/databases/$(database)/documents/staff/$(currentUserLinkedStaffId()))
+        && get(/databases/$(database)/documents/staff/$(currentUserLinkedStaffId())).data.ownerUid == request.auth.uid;
+    }
+
+    function isStaffOwner(staffId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/staff/$(staffId))
+        && get(/databases/$(database)/documents/staff/$(staffId)).data.ownerUid == request.auth.uid;
     }
 
     function incoming() {
@@ -277,7 +301,7 @@ service cloud.firestore {
     match /admins/{uid} {
       allow get: if isValidId(uid) && (isOwner(uid) || isAdmin());
       allow list: if isBootstrappedAdmin() && resource.data.uid is string;
-      allow create: if isVerifiedUser()
+      allow create: if isSignedIn()
         && isValidId(uid)
         && isValidAdminRecord(incoming(), uid)
         && incoming().createdAt == request.time
@@ -298,7 +322,7 @@ service cloud.firestore {
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
         && (
-          (isOwner(uid) && incoming().role == 'staff')
+          (isOwner(uid) && incoming().role == 'staff' && incoming().linkedStaffId == '')
           || isAdmin()
         );
       allow update: if isSignedIn()
@@ -308,12 +332,25 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
+          // Tier 1: Admin full account management (including unlinking or changing role)
           (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'linkedStaffId', 'role', 'email', 'updatedAt']))
           ||
+          // Tier 2a: Owner updates displayName only
           (isOwner(uid)
             && incoming().role == existing().role
             && incoming().email == existing().email
-            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'linkedStaffId', 'updatedAt']))
+            && incoming().linkedStaffId == existing().linkedStaffId
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt']))
+          ||
+          // Tier 2b: One-time atomic self-binding of linkedStaffId when claiming/creating own staff profile
+          (isOwner(uid)
+            && incoming().role == existing().role
+            && incoming().email == existing().email
+            && !hasClaimedStaff()
+            && incoming().linkedStaffId.size() > 0
+            && existsAfter(/databases/$(database)/documents/staff/$(incoming().linkedStaffId))
+            && getAfter(/databases/$(database)/documents/staff/$(incoming().linkedStaffId)).data.ownerUid == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['linkedStaffId', 'updatedAt']))
         );
       allow delete: if isValidId(uid) && isAdmin();
     }
@@ -348,7 +385,7 @@ service cloud.firestore {
     }
 
     // =========================================================
-    // 4. Staff Roster Profiles (Non-PII Shared Ward Roster)
+    // 4. Staff Roster Profiles (Strict Ownership & Anti-Hijack)
     // =========================================================
     match /staff/{staffId} {
       allow get: if isSignedIn() && isValidShortId(staffId) && (resource == null || resource.data.visibility == 'department');
@@ -357,18 +394,41 @@ service cloud.firestore {
         && isValidShortId(staffId)
         && isValidStaffMember(incoming(), staffId)
         && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time;
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin()
+          || (
+            !hasClaimedStaff()
+            && incoming().ownerUid == request.auth.uid
+            && existsAfter(/databases/$(database)/documents/userAccounts/$(request.auth.uid))
+            && getAfter(/databases/$(database)/documents/userAccounts/$(request.auth.uid)).data.linkedStaffId == staffId
+          )
+        );
       allow update: if isSignedIn()
         && isValidShortId(staffId)
         && isValidStaffMember(incoming(), staffId)
         && incoming().staffId == existing().staffId
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly([
-          'orderIndex', 'fullName', 'category', 'positionLabel',
-          'positionSubLabel', 'ownerUid', 'active', 'updatedAt'
-        ]);
-      allow delete: if isSignedIn() && isValidShortId(staffId) && existing().visibility == 'department';
+        && (
+          // Tier 1: Admin can edit staff profile or unlink/reassign ownerUid
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly([
+            'orderIndex', 'fullName', 'category', 'positionLabel',
+            'positionSubLabel', 'ownerUid', 'active', 'updatedAt'
+          ]))
+          ||
+          // Tier 2: One-time atomic self-claim of an unclaimed staff profile (blocks hijacking & multi-claim)
+          (existing().ownerUid == ''
+            && incoming().ownerUid == request.auth.uid
+            && !hasClaimedStaff()
+            && existsAfter(/databases/$(database)/documents/userAccounts/$(request.auth.uid))
+            && getAfter(/databases/$(database)/documents/userAccounts/$(request.auth.uid)).data.linkedStaffId == staffId
+            && incoming().diff(existing()).affectedKeys().hasOnly(['ownerUid', 'updatedAt']))
+        );
+      allow delete: if isSignedIn()
+        && isValidShortId(staffId)
+        && existing().visibility == 'department'
+        && isAdmin();
     }
 
     // =========================================================
@@ -381,7 +441,8 @@ service cloud.firestore {
         && isValidMonthId(monthId)
         && isValidRosterMonth(incoming(), monthId)
         && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time;
+        && incoming().updatedAt == request.time
+        && (isAdmin() || incoming().status == 'open');
       allow update: if isSignedIn()
         && isValidMonthId(monthId)
         && isValidRosterMonth(incoming(), monthId)
@@ -390,12 +451,23 @@ service cloud.firestore {
         && incoming().monthNumber == existing().monthNumber
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly([
-          'holidays', 'publicHolidays', 'payDateLabel', 'headerNote', 'workloadHeaderNote', 'smcHeaderNote', 'productivity', 'status', 'updatedAt'
-        ]);
+        && (
+          // Tier 1: Admin can update all month fields including lock/unlock status
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly([
+            'holidays', 'publicHolidays', 'payDateLabel', 'headerNote', 'workloadHeaderNote', 'smcHeaderNote', 'productivity', 'status', 'updatedAt'
+          ]))
+          ||
+          // Tier 2: Staff can update non-lock month fields (productivity, holidays, notes) but CANNOT lock/unlock months
+          (incoming().status == existing().status
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'holidays', 'publicHolidays', 'payDateLabel', 'headerNote', 'workloadHeaderNote', 'smcHeaderNote', 'productivity', 'updatedAt'
+            ]))
+        );
       allow delete: if false;
 
       // Master Gate Subcollection: Monthly Shift Entries
+      // Regular users may ONLY create/update their OWN bound staffId while month is open.
+      // Admins may create/update shift entries for ANY staffId.
       match /entries/{staffId} {
         allow get: if isSignedIn() && isValidMonthId(monthId) && isValidShortId(staffId)
           && (resource == null || resource.data.visibility == 'department');
@@ -409,7 +481,14 @@ service cloud.firestore {
           && incoming().updatedAt == request.time
           && exists(/databases/$(database)/documents/months/$(monthId))
           && exists(/databases/$(database)/documents/staff/$(staffId))
-          && get(/databases/$(database)/documents/months/$(monthId)).data.status == 'open';
+          && (
+            isAdmin()
+            || (
+              get(/databases/$(database)/documents/months/$(monthId)).data.status == 'open'
+              && isStaffOwner(staffId)
+              && incoming().ownerUid == request.auth.uid
+            )
+          );
         allow update: if isSignedIn()
           && isValidMonthId(monthId)
           && isValidShortId(staffId)
@@ -421,10 +500,16 @@ service cloud.firestore {
           && incoming().updatedAt == request.time
           && exists(/databases/$(database)/documents/months/$(monthId))
           && exists(/databases/$(database)/documents/staff/$(staffId))
-          && get(/databases/$(database)/documents/months/$(monthId)).data.status == 'open'
           && incoming().diff(existing()).affectedKeys().hasOnly([
             'mainShifts', 'nightShifts', 'workloadShifts', 'standbyShifts', 'publicHolidayShifts', 'smcShifts', 'updatedAt'
-          ]);
+          ])
+          && (
+            isAdmin()
+            || (
+              get(/databases/$(database)/documents/months/$(monthId)).data.status == 'open'
+              && isStaffOwner(staffId)
+            )
+          );
         allow delete: if false;
       }
     }

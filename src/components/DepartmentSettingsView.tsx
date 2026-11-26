@@ -18,11 +18,13 @@ import {
 import { getEffectivePublicHolidays } from '../utils/rosterCalculations';
 
 interface DepartmentSettingsViewProps {
+  isAdmin: boolean;
   settings: DepartmentSettings;
   month: RosterMonth;
 }
 
 export const DepartmentSettingsView: React.FC<DepartmentSettingsViewProps> = ({
+  isAdmin,
   settings,
   month,
 }) => {
@@ -104,6 +106,7 @@ export const DepartmentSettingsView: React.FC<DepartmentSettingsViewProps> = ({
   };
 
   const handleToggleLock = async () => {
+    if (!isAdmin) return;
     setSavingMonth(true);
     try {
       await updateRosterMonthAdmin(month.monthId, {
@@ -128,28 +131,37 @@ export const DepartmentSettingsView: React.FC<DepartmentSettingsViewProps> = ({
               วันทำการ {daysInMonth - holidays.length} วัน · วันหยุดทั้งหมด {holidays.length} วัน · {specialRateLabel} {publicHolidays.length} วัน
             </p>
           </div>
-          <button
-            type="button"
-            disabled={savingMonth}
-            onClick={handleToggleLock}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-              month.status === 'locked'
-                ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
-                : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-50'
-            }`}
-          >
-            {month.status === 'locked' ? (
-              <>
-                <Unlock className="w-3.5 h-3.5" />
-                ปลดล็อกให้บุคลากรลงเวรได้
-              </>
-            ) : (
-              <>
-                <Lock className="w-3.5 h-3.5" />
-                ล็อกตารางเดือนนี้เพื่อส่งเบิก
-              </>
-            )}
-          </button>
+          {isAdmin ? (
+            <button
+              type="button"
+              disabled={savingMonth}
+              onClick={handleToggleLock}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                month.status === 'locked'
+                  ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                  : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              {month.status === 'locked' ? (
+                <>
+                  <Unlock className="w-3.5 h-3.5" />
+                  ปลดล็อกให้บุคลากรลงเวรได้
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3.5 h-3.5" />
+                  ล็อกตารางเดือนนี้เพื่อส่งเบิก
+                </>
+              )}
+            </button>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-lg whitespace-nowrap shrink-0">
+              <Lock className="w-3.5 h-3.5 text-slate-500" />
+              {month.status === 'locked'
+                ? 'เดือนนี้ถูกล็อกแล้ว (ปลดล็อกโดย Admin)'
+                : 'เปิดให้ลงเวร (ล็อกเดือนได้เฉพาะ Admin)'}
+            </div>
+          )}
         </div>
 
         {/* Mode Switcher: Regular Holiday vs Public Holiday */}

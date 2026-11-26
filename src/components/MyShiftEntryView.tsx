@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertCircle,
   ArrowRight,
   Check,
   ClipboardCheck,
@@ -9,7 +10,9 @@ import {
   Lock,
   Printer,
   Save,
+  ShieldCheck,
   Sparkles,
+  UserCheck,
   UserPlus,
 } from 'lucide-react';
 import {
@@ -29,6 +32,8 @@ import {
   WorkloadShiftCode,
 } from '../types/roster';
 import {
+  claimStaffProfile,
+  createOwnStaffProfile,
   createStaffMember,
   saveShiftEntry,
   seedOctober2569DepartmentData,
@@ -50,6 +55,11 @@ import { ShiftCellDisplay } from './ShiftCellDisplay';
 import { QuickDateEntryCard } from './QuickDateEntryCard';
 
 interface MyShiftEntryViewProps {
+  currentUserUid: string;
+  currentUserEmail: string;
+  currentUserDisplayName: string;
+  isAdmin: boolean;
+  ownedStaff: StaffMember | null;
   selectedStaffId: string;
   onSelectStaffId: (staffId: string) => void;
   staffList: StaffMember[];
@@ -96,6 +106,11 @@ const PUBLIC_HOLIDAY_BRUSHES: { value: PublicHolidayShiftCode; label: string }[]
 ];
 
 export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
+  currentUserUid,
+  currentUserEmail,
+  currentUserDisplayName,
+  isAdmin,
+  ownedStaff,
   selectedStaffId,
   onSelectStaffId,
   staffList,
@@ -109,15 +124,25 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
 }) => {
   const activeStaffList = useMemo(() => staffList.filter((s) => s.active), [staffList]);
 
-  const targetStaff = useMemo(
-    () =>
+  // Regular users are strictly locked to their own bound staff profile; Admin can choose any active staff
+  const targetStaff = useMemo(() => {
+    if (!isAdmin) {
+      return ownedStaff;
+    }
+    return (
       activeStaffList.find((s) => s.staffId === selectedStaffId) ||
       activeStaffList[0] ||
-      null,
-    [activeStaffList, selectedStaffId],
-  );
+      null
+    );
+  }, [isAdmin, ownedStaff, activeStaffList, selectedStaffId]);
 
-  // Quick add new staff form state (used when empty or when clicking "+ เพิ่มชื่อใหม่")
+  // One-time self-binding state for regular users who haven't claimed their name yet
+  const [candidateStaffId, setCandidateStaffId] = useState<string>('');
+  const [bindingBusy, setBindingBusy] = useState(false);
+  const [bindError, setBindError] = useState<string | null>(null);
+  const [showCreateOwnInBinding, setShowCreateOwnInBinding] = useState(false);
+
+  // Quick add new staff form state (Admin quick add or self-profile creation)
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState<StaffCategory>('RN');
@@ -159,6 +184,7 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
     monthId: string;
     staffId: string;
     ownerUid: string;
+    canEdit: boolean;
   } | null>(null);
   const latestDraftRef = useRef<{
     mainShifts: Record<string, MainShiftCode>;
@@ -176,6 +202,12 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
     smcShifts: {},
   });
 
+  const canEdit = useMemo(() => {
+    if (!targetStaff) return false;
+    if (isAdmin) return true;
+    return month.status === 'open' && targetStaff.ownerUid === currentUserUid;
+  }, [targetStaff, isAdmin, month.status, currentUserUid]);
+
   useEffect(() => {
     const contextKey = `${targetStaff?.staffId || ''}|${month.monthId}`;
     const isContextSwitch = loadedContextKeyRef.current !== contextKey;
@@ -183,9 +215,10 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
       if (autoSaveTimerRef.current && pendingMetaRef.current) {
         clearTimeout(autoSaveTimerRef.current);
         autoSaveTimerRef.current = null;
-        if (localVersionRef.current > savedVersionRef.current) {
+        if (pendingMetaRef.current.canEdit && localVersionRef.current > savedVersionRef.current) {
+          const { canEdit: _c, ...saveMeta } = pendingMetaRef.current;
           void saveShiftEntry({
-            ...pendingMetaRef.current,
+            ...saveMeta,
             ...latestDraftRef.current,
           });
         }
@@ -197,9 +230,12 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
         ? {
             monthId: month.monthId,
             staffId: targetStaff.staffId,
-            ownerUid: targetStaff.ownerUid || '',
+            ownerUid: targetStaff.ownerUid || (isAdmin ? '' : currentUserUid),
+            canEdit,
           }
         : null;
+    } else if (pendingMetaRef.current) {
+      pendingMetaRef.current.canEdit = canEdit;
     }
 
     if (isContextSwitch || localVersionRef.current === savedVersionRef.current) {
@@ -227,27 +263,27 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
       };
       setIsDirty(false);
     }
-  }, [targetStaff?.staffId, targetStaff?.ownerUid, month.monthId, existingEntry]);
+  }, [targetStaff?.staffId, targetStaff?.ownerUid, month.monthId, existingEntry, isAdmin, currentUserUid, canEdit]);
 
   useEffect(() => {
     return () => {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
         autoSaveTimerRef.current = null;
-        if (pendingMetaRef.current && localVersionRef.current > savedVersionRef.current) {
+        if (
+          pendingMetaRef.current &&
+          pendingMetaRef.current.canEdit &&
+          localVersionRef.current > savedVersionRef.current
+        ) {
+          const { canEdit: _c, ...saveMeta } = pendingMetaRef.current;
           void saveShiftEntry({
-            ...pendingMetaRef.current,
+            ...saveMeta,
             ...latestDraftRef.current,
           });
         }
       }
     };
   }, []);
-
-  const canEdit = useMemo(() => {
-    if (!targetStaff) return false;
-    return month.status === 'open';
-  }, [targetStaff, month.status]);
 
   const daysInMonth = getDaysInMonth(month.yearAD, month.monthNumber);
   const holidaySet = useMemo(() => new Set(month.holidays), [month.holidays]);
@@ -303,22 +339,65 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
     e.preventDefault();
     if (!newName.trim()) return;
     setOnboardingBusy(true);
+    setBindError(null);
     try {
       const nextOrder =
         staffList.reduce((max, s) => Math.max(max, s.orderIndex), 0) + 1;
-      const newId = await createStaffMember({
-        fullName: newName.trim(),
-        category: newCategory,
-        positionLabel: newPosLabel.trim() || CATEGORY_LABELS[newCategory],
-        positionSubLabel: newPosSub.trim(),
-        orderIndex: nextOrder,
-        ownerUid: '',
-      });
+      let newId: string;
+      if (isAdmin) {
+        newId = await createStaffMember({
+          fullName: newName.trim(),
+          category: newCategory,
+          positionLabel: newPosLabel.trim() || CATEGORY_LABELS[newCategory],
+          positionSubLabel: newPosSub.trim(),
+          orderIndex: nextOrder,
+          ownerUid: '',
+        });
+      } else {
+        newId = await createOwnStaffProfile(
+          {
+            fullName: newName.trim(),
+            category: newCategory,
+            positionLabel: newPosLabel.trim() || CATEGORY_LABELS[newCategory],
+            positionSubLabel: newPosSub.trim(),
+            orderIndex: nextOrder,
+          },
+          currentUserUid,
+          { email: currentUserEmail, displayName: currentUserDisplayName },
+        );
+      }
       onSelectStaffId(newId);
       setNewName('');
       setShowAddStaffModal(false);
+      setShowCreateOwnInBinding(false);
+    } catch (err) {
+      console.error('Create profile failed:', err);
+      setBindError('ไม่สามารถสร้างรายชื่อได้ในขณะนี้ กรุณาลองใหม่อีกครั้งหรือติดต่อ Admin');
     } finally {
       setOnboardingBusy(false);
+    }
+  };
+
+  const handleConfirmClaimStaff = async () => {
+    if (!candidateStaffId) return;
+    const chosen = activeStaffList.find((s) => s.staffId === candidateStaffId);
+    if (!chosen || chosen.ownerUid) {
+      setBindError('รายชื่อนี้ถูกผูกบัญชีไปแล้ว กรุณาเลือกรายชื่อที่ยังไม่ถูกผูกบัญชี หรือติดต่อ Admin');
+      return;
+    }
+    setBindingBusy(true);
+    setBindError(null);
+    try {
+      await claimStaffProfile(chosen.staffId, currentUserUid, {
+        email: currentUserEmail,
+        displayName: currentUserDisplayName,
+      });
+      onSelectStaffId(chosen.staffId);
+    } catch (err) {
+      console.error('Claim staff failed:', err);
+      setBindError('ไม่สามารถผูกบัญชีกับรายชื่อนี้ได้ (อาจถูกผู้อื่นผูกไปแล้ว) กรุณาลองใหม่หรือติดต่อ Admin');
+    } finally {
+      setBindingBusy(false);
     }
   };
 
@@ -339,7 +418,7 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
       await saveShiftEntry({
         monthId: month.monthId,
         staffId: targetStaff.staffId,
-        ownerUid: targetStaff.ownerUid || '',
+        ownerUid: targetStaff.ownerUid || (isAdmin ? '' : currentUserUid),
         mainShifts: draft.mainShifts,
         nightShifts: draft.nightShifts,
         workloadShifts: draft.workloadShifts,
@@ -560,14 +639,258 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
     onOpenSmcRoster?.(targetStaff?.staffId);
   };
 
-  // Initial empty state: no staff records in DB yet
+  // Non-admin user who has NOT yet bound their login account to their own staff profile
+  if (!isAdmin && !targetStaff) {
+    const unclaimedStaff = activeStaffList.filter((s) => !s.ownerUid);
+    const claimedStaff = activeStaffList.filter((s) => Boolean(s.ownerUid));
+    const selectedCandidate = unclaimedStaff.find((s) => s.staffId === candidateStaffId) || null;
+
+    return (
+      <div className="max-w-3xl mx-auto space-y-5">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center shrink-0">
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-slate-900">
+                ยืนยันชื่อบุคลากรเพื่อผูกกับบัญชีของคุณ (ทำครั้งเดียว)
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                เพื่อป้องกันการลงเวรผิดคน ระบบกำหนดให้แต่ละบัญชีสามารถลงและแก้ไขเวรได้เฉพาะชื่อของตนเองเท่านั้น ไม่สามารถลงข้อมูลให้ผู้อื่นได้ (ยกเว้น Admin)
+              </p>
+            </div>
+          </div>
+
+          {bindError && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{bindError}</span>
+            </div>
+          )}
+
+          {activeStaffList.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-semibold text-slate-700">
+                  เลือกชื่อของคุณจากรายชื่อที่ยังไม่ได้ผูกบัญชี ({unclaimedStaff.length} รายชื่อว่าง)
+                </div>
+                {claimedStaff.length > 0 && (
+                  <span className="text-[11px] text-slate-400">
+                    ผูกบัญชีแล้ว {claimedStaff.length} คน
+                  </span>
+                )}
+              </div>
+
+              {unclaimedStaff.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
+                  {unclaimedStaff.map((s) => {
+                    const isSelected = candidateStaffId === s.staffId;
+                    return (
+                      <button
+                        key={s.staffId}
+                        type="button"
+                        onClick={() => {
+                          setCandidateStaffId(s.staffId);
+                          setBindError(null);
+                        }}
+                        className={`text-left px-3.5 py-2.5 rounded-lg border transition-colors cursor-pointer flex items-center justify-between gap-2 ${
+                          isSelected
+                            ? 'bg-teal-50 border-teal-600 ring-1 ring-teal-600'
+                            : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-slate-900 truncate">
+                            {s.orderIndex}. {s.fullName}
+                          </div>
+                          <div className="text-[11px] text-slate-500 truncate">
+                            {CATEGORY_LABELS[s.category]} · {s.positionLabel}
+                          </div>
+                        </div>
+                        <div
+                          className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                            isSelected
+                              ? 'bg-teal-700 border-teal-700 text-white'
+                              : 'border-slate-300 bg-white'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-2.5 h-2.5" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                  รายชื่อบุคลากรทั้งหมดในหน่วยงานถูกผูกบัญชีแล้ว หากชื่อของคุณถูกผูกผิดบัญชี กรุณาติดต่อ Admin เพื่อปลดการผูกบัญชี หรือสร้างรายชื่อใหม่ด้านล่างหากยังไม่มีชื่อในระบบ
+                </div>
+              )}
+
+              {selectedCandidate && (
+                <div className="p-3.5 rounded-lg bg-teal-50/70 border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="text-xs text-teal-900 space-y-0.5">
+                    <div className="font-semibold">
+                      คุณกำลังเลือกผูกบัญชีกับ: {selectedCandidate.fullName}
+                    </div>
+                    <div className="text-[11px] text-teal-700">
+                      หลังยืนยันแล้ว บัญชีนี้จะแก้ไขเวรได้เฉพาะชื่อนี้เท่านั้น (หากเลือกผิด แจ้ง Admin ปลดล็อกได้)
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={bindingBusy}
+                    onClick={() => void handleConfirmClaimStaff()}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    {bindingBusy ? 'กำลังยืนยัน...' : 'ยืนยันผูกบัญชีเป็นชื่อของฉัน'}
+                  </button>
+                </div>
+              )}
+
+              {claimedStaff.length > 0 && (
+                <details className="text-xs text-slate-500 pt-1">
+                  <summary className="cursor-pointer hover:text-slate-700 font-medium">
+                    ดูรายชื่อที่ผูกบัญชีแล้ว ({claimedStaff.length} คน — ไม่สามารถเลือกซ้ำได้)
+                  </summary>
+                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {claimedStaff.map((s) => (
+                      <div
+                        key={s.staffId}
+                        className="px-3 py-1.5 rounded-md bg-slate-50 border border-slate-200 text-slate-400 flex items-center justify-between gap-2"
+                      >
+                        <span className="truncate">
+                          {s.orderIndex}. {s.fullName}
+                        </span>
+                        <span className="text-[10px] font-medium text-slate-500 shrink-0">
+                          ผูกบัญชีแล้ว
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+
+          {/* Create own new profile if not in list */}
+          <div className="pt-3 border-t border-slate-100">
+            {activeStaffList.length > 0 && !showCreateOwnInBinding ? (
+              <button
+                type="button"
+                onClick={() => setShowCreateOwnInBinding(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 hover:text-teal-800 cursor-pointer"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                ไม่พบชื่อของคุณในรายการ? สร้างรายชื่อของฉันใหม่
+              </button>
+            ) : (
+              <form onSubmit={handleCreateOwnProfile} className="space-y-3 pt-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-slate-900 font-semibold text-sm">
+                    <UserPlus className="w-4 h-4 text-teal-700" />
+                    <span>สร้างรายชื่อบุคลากรของฉันใหม่</span>
+                  </div>
+                  {activeStaffList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateOwnInBinding(false)}
+                      className="text-xs text-slate-500 hover:text-slate-700 cursor-pointer"
+                    >
+                      ซ่อน
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      ชื่อ - นามสกุล (พร้อมคำนำหน้า)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      placeholder="เช่น น.ส.สมหญิง ใจดี"
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      กลุ่มตำแหน่ง (กำหนดอัตราค่าเวรอัตโนมัติ)
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['RN', 'PN', 'NA'] as StaffCategory[]).map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => handleCategoryPreset(cat)}
+                          className={`px-2.5 py-2 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
+                            newCategory === cat
+                              ? 'bg-teal-700 text-white border-teal-700'
+                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          {CATEGORY_LABELS[cat]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">
+                        ชื่อตำแหน่งที่แสดงในตารางเวร
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newPosLabel}
+                        onChange={(e) => setNewPosLabel(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">
+                        ระดับตำแหน่ง (บรรทัดรอง ไม่บังคับ)
+                      </label>
+                      <input
+                        type="text"
+                        value={newPosSub}
+                        onChange={(e) => setNewPosSub(e.target.value)}
+                        placeholder="เช่น พยาบาลวิชาชีพชำนาญการ"
+                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={onboardingBusy || !newName.trim()}
+                  className="w-full px-4 py-2.5 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
+                >
+                  {onboardingBusy ? 'กำลังบันทึก...' : 'สร้างรายชื่อของฉันและผูกบัญชีทันที'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Admin initial empty state: no staff records in DB yet
   if (!targetStaff) {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h2 className="text-xl font-bold text-slate-900">
-              เริ่มต้นใช้งานตารางเวรประจำเดือน (ไม่ต้องลงชื่อเข้าใช้ด้วยอีเมล)
+              เริ่มต้นใช้งานตารางเวรประจำเดือน (สิทธิ์ Admin)
             </h2>
             <p className="text-sm text-slate-600">
               นำเข้ารายชื่อและข้อมูลตัวอย่างของกลุ่มงาน (13 คน) หรือเพิ่มรายชื่อบุคลากรใหม่ด้านล่างเพื่อเริ่มลงเวรได้ทันที
@@ -579,7 +902,7 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
             onClick={async () => {
               setOnboardingBusy(true);
               try {
-                await seedOctober2569DepartmentData('');
+                await seedOctober2569DepartmentData(currentUserUid);
                 onSelectStaffId('rn_01_wachiraporn');
               } finally {
                 setOnboardingBusy(false);
@@ -703,30 +1026,50 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
             <span>ประจำเดือน {getThaiMonthYearLabel(month.yearAD, month.monthNumber)}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
-            <select
-              value={targetStaff.staffId}
-              onChange={(e) => onSelectStaffId(e.target.value)}
-              aria-label="เลือกชื่อบุคลากรเพื่อลงเวร"
-              className="text-base sm:text-lg font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-teal-600"
-            >
-              {activeStaffList.map((s) => (
-                <option key={s.staffId} value={s.staffId}>
-                  {s.orderIndex}. {s.fullName} ({CATEGORY_LABELS[s.category]})
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => setShowAddStaffModal((prev) => !prev)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              เพิ่มชื่อใหม่
-            </button>
+            {isAdmin ? (
+              <>
+                <select
+                  value={targetStaff.staffId}
+                  onChange={(e) => onSelectStaffId(e.target.value)}
+                  aria-label="เลือกชื่อบุคลากรเพื่อลงเวร (สิทธิ์ Admin)"
+                  className="text-base sm:text-lg font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-teal-600"
+                >
+                  {activeStaffList.map((s) => (
+                    <option key={s.staffId} value={s.staffId}>
+                      {s.orderIndex}. {s.fullName} ({CATEGORY_LABELS[s.category]})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowAddStaffModal((prev) => !prev)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  เพิ่มชื่อใหม่
+                </button>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-teal-800 bg-teal-50 border border-teal-200 rounded-md whitespace-nowrap">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  สิทธิ์ Admin (ลงเวรให้ทุกคนได้)
+                </span>
+              </>
+            ) : (
+              <>
+                <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                  {targetStaff.orderIndex}. {targetStaff.fullName}
+                </h2>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-slate-700 bg-slate-100 border border-slate-200 rounded-md whitespace-nowrap">
+                  <Lock className="w-3 h-3 text-teal-700" />
+                  ลงเวรเฉพาะของตนเอง
+                </span>
+              </>
+            )}
             {month.status === 'locked' && (
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800">
                 <Lock className="w-3.5 h-3.5" />
-                เดือนนี้ถูกล็อกแล้ว (ปลดล็อกได้ในเมนู ตั้งค่าอัตราและวันหยุด)
+                {isAdmin
+                  ? 'เดือนนี้ถูกล็อกสำหรับผู้ใช้ทั่วไป (Admin สามารถแก้ไขได้)'
+                  : 'เดือนนี้ถูกล็อกแล้ว (ปลดล็อกได้โดย Admin)'}
               </span>
             )}
           </div>
@@ -810,8 +1153,8 @@ export const MyShiftEntryView: React.FC<MyShiftEntryViewProps> = ({
         </div>
       </div>
 
-      {/* Optional Quick Inline Add Staff Form */}
-      {showAddStaffModal && (
+      {/* Optional Quick Inline Add Staff Form (Admin only) */}
+      {isAdmin && showAddStaffModal && (
         <form
           onSubmit={handleCreateOwnProfile}
           className="no-print bg-white border border-teal-200 rounded-xl p-5 space-y-4"

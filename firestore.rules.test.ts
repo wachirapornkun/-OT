@@ -46,7 +46,7 @@ export const dirtyDozenTests: SecurityTestCase[] = [
       role: 'admin',
     },
     expectedResult: 'PERMISSION_DENIED',
-    mitigatingGate: 'allow create enforces incoming().role == "staff" for non-admins',
+    mitigatingGate: 'allow create enforces incoming().role == "staff" && incoming().linkedStaffId == "" for non-admins',
   },
   {
     id: 3,
@@ -60,12 +60,12 @@ export const dirtyDozenTests: SecurityTestCase[] = [
   {
     id: 4,
     name: 'Email Spoofing Attack (Unverified Admin Email)',
-    collectionPath: '/settings/department',
-    operation: 'update',
+    collectionPath: '/admins/attacker',
+    operation: 'create',
     actor: { uid: 'attacker', email: 'Wachirapornkun@gmail.com', emailVerified: false },
-    payload: { rnOtRate: 99999 },
+    payload: { uid: 'attacker' },
     expectedResult: 'PERMISSION_DENIED',
-    mitigatingGate: 'isAdmin() mandates request.auth.token.email_verified == true',
+    mitigatingGate: 'isBootstrappedAdmin() mandates request.auth.token.email_verified == true',
   },
   {
     id: 5,
@@ -75,7 +75,7 @@ export const dirtyDozenTests: SecurityTestCase[] = [
     actor: { uid: 'user_b', email: 'nurse@hospital.th', emailVerified: true },
     payload: { staffId: 'x'.repeat(200) },
     expectedResult: 'PERMISSION_DENIED',
-    mitigatingGate: 'isValidId(staffId) limits ID to <= 64 chars matching ^[a-zA-Z0-9_-]+$',
+    mitigatingGate: 'isValidShortId(staffId) limits ID to <= 64 chars matching ^[a-zA-Z0-9_-]+$',
   },
   {
     id: 6,
@@ -89,13 +89,13 @@ export const dirtyDozenTests: SecurityTestCase[] = [
   },
   {
     id: 7,
-    name: 'Cross-Staff Shift Tampering',
+    name: 'Cross-Staff Shift Tampering (Colleague or Unclaimed Staff)',
     collectionPath: '/months/2026-10/entries/staff_1',
     operation: 'update',
     actor: { uid: 'user_b', email: 'b@hospital.th', emailVerified: true },
     payload: { mainShifts: { '1': 'ช/บ' } },
     expectedResult: 'PERMISSION_DENIED',
-    mitigatingGate: 'Relational check verifies staff/{staffId}.ownerUid == request.auth.uid',
+    mitigatingGate: 'isStaffOwner(staffId) verifies /staff/{staffId}.ownerUid == request.auth.uid (except isAdmin())',
   },
   {
     id: 8,
@@ -119,13 +119,13 @@ export const dirtyDozenTests: SecurityTestCase[] = [
   },
   {
     id: 10,
-    name: 'Immutable Field Mutation on Update',
-    collectionPath: '/months/2026-10/entries/staff_1',
+    name: 'Multi-Claim / Unbind Bypass by Non-Admin',
+    collectionPath: '/staff/staff_2',
     operation: 'update',
     actor: { uid: 'user_a', email: 'a@hospital.th', emailVerified: true },
-    payload: { staffId: 'staff_2', ownerUid: 'user_b' },
+    payload: { ownerUid: 'user_a' },
     expectedResult: 'PERMISSION_DENIED',
-    mitigatingGate: 'affectedKeys().hasOnly(["mainShifts","nightShifts","workloadShifts","standbyShifts","updatedAt"])',
+    mitigatingGate: '!hasClaimedStaff() + atomic getAfter(userAccounts) blocks claiming a second staff profile',
   },
   {
     id: 11,
@@ -139,12 +139,12 @@ export const dirtyDozenTests: SecurityTestCase[] = [
   },
   {
     id: 12,
-    name: 'Staff Profile Ownership Hijack',
+    name: 'Staff Profile Ownership Hijack & Unauthorized Delete',
     collectionPath: '/staff/staff_1',
     operation: 'update',
     actor: { uid: 'user_b', email: 'b@hospital.th', emailVerified: true },
     payload: { ownerUid: 'user_b' },
     expectedResult: 'PERMISSION_DENIED',
-    mitigatingGate: 'Claim action requires existing().ownerUid == "" before allowing ownerUid assignment',
+    mitigatingGate: 'Claim action requires existing().ownerUid == "" && !hasClaimedStaff(); delete requires isAdmin()',
   },
 ];

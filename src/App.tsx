@@ -9,13 +9,16 @@ import {
   ClipboardList,
   FileSpreadsheet,
   KeyRound,
+  Lock,
   LogOut,
   Menu,
   Printer,
   QrCode,
   Settings,
+  ShieldCheck,
   Stethoscope,
   User as UserIcon,
+  UserCheck,
   Users,
   X,
 } from 'lucide-react';
@@ -32,6 +35,7 @@ import {
   ensureRosterMonth,
   ensureUserAccount,
   subscribeDepartmentSettings,
+  subscribeIsAdmin,
   subscribeMonthEntries,
   subscribeRosterMonth,
   subscribeStaffList,
@@ -146,13 +150,45 @@ function WorkspaceApp({ user }: { user: User }) {
   const [entriesByStaffId, setEntriesByStaffId] = useState<Record<string, MonthlyShiftEntry>>({});
   const [dataLoading, setDataLoading] = useState(true);
 
+  const isBootstrappedAdmin = useMemo(
+    () => Boolean(user.emailVerified && user.email?.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL),
+    [user.email, user.emailVerified],
+  );
+  const [isAdmin, setIsAdmin] = useState<boolean>(isBootstrappedAdmin);
+
   const hasPasswordProvider = useMemo(
     () => user.providerData.some((provider) => provider.providerId === 'password'),
     [user.providerData],
   );
   const displayUsername = useMemo(() => getDisplayUsername(user.email), [user.email]);
 
+  // The single staff profile owned by the signed-in user (derived authoritatively from staff.ownerUid)
+  const ownedStaff = useMemo(
+    () => staffList.find((s) => s.ownerUid === user.uid) || null,
+    [staffList, user.uid],
+  );
+
+  // Regular users are strictly locked to their own bound staffId; Admin can switch to any staff
+  const effectiveSelectedStaffId = isAdmin ? selectedStaffId : ownedStaff?.staffId || '';
+
   const handleSelectStaffId = (staffId: string, persistRemote = true) => {
+    if (!isAdmin) {
+      // Non-admin users can only ever select their own bound staff profile
+      const targetId = ownedStaff?.staffId || staffId;
+      if (ownedStaff && staffId !== ownedStaff.staffId) {
+        return;
+      }
+      setSelectedStaffId(targetId);
+      try {
+        if (targetId) {
+          localStorage.setItem(userStaffStorageKey, targetId);
+        }
+      } catch {
+        // Ignore storage quota / private mode issues
+      }
+      return;
+    }
+
     setSelectedStaffId(staffId);
     try {
       if (staffId) {
@@ -179,12 +215,20 @@ function WorkspaceApp({ user }: { user: User }) {
     }
   };
 
-  // 0. Sync authenticated user's profile in userAccounts/{uid}
+  // 0a. Real-time Admin privilege subscription (bootstrapped email or /admins/{uid})
+  useEffect(() => {
+    const unsubAdmin = subscribeIsAdmin(
+      user.uid,
+      user.email,
+      Boolean(user.emailVerified),
+      setIsAdmin,
+    );
+    return () => unsubAdmin();
+  }, [user.uid, user.email, user.emailVerified]);
+
+  // 0b. Sync authenticated user's profile in userAccounts/{uid}
   useEffect(() => {
     let cancelled = false;
-    const isVerifiedBootstrappedAdmin = Boolean(
-      user.emailVerified && user.email?.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL,
-    );
 
     const syncAccount = async () => {
       try {
@@ -192,13 +236,13 @@ function WorkspaceApp({ user }: { user: User }) {
           uid: user.uid,
           email: user.email || `${user.uid}@bangphli.local`,
           displayName: user.displayName || getDisplayUsername(user.email) || 'ผู้ใช้งาน',
-          isAdmin: isVerifiedBootstrappedAdmin,
+          isAdmin: isBootstrappedAdmin,
         });
         if (cancelled) return;
         if (account.displayName) {
           setAccountDisplayName(account.displayName);
         }
-        if (account.linkedStaffId) {
+        if (isAdmin && account.linkedStaffId) {
           setSelectedStaffId(account.linkedStaffId);
           try {
             localStorage.setItem(userStaffStorageKey, account.linkedStaffId);
@@ -215,7 +259,7 @@ function WorkspaceApp({ user }: { user: User }) {
     return () => {
       cancelled = true;
     };
-  }, [user.uid, user.email, user.displayName, user.emailVerified, userStaffStorageKey]);
+  }, [user.uid, user.email, user.displayName, isBootstrappedAdmin, isAdmin, userStaffStorageKey]);
 
   // 1. Global settings & staff subscriptions (only mounted when authenticated)
   useEffect(() => {
@@ -303,14 +347,14 @@ function WorkspaceApp({ user }: { user: User }) {
 
   const activeStaff = useMemo(() => staffList.filter((s) => s.active), [staffList]);
 
-  // Auto-select first active staff if current selection is empty or no longer exists
+  // Auto-select first active staff ONLY for Admin when selection is empty or no longer exists
   useEffect(() => {
-    if (activeStaff.length === 0) return;
+    if (!isAdmin || activeStaff.length === 0) return;
     const stillValid = activeStaff.some((s) => s.staffId === selectedStaffId);
     if (!stillValid) {
-      handleSelectStaffId(activeStaff[0].staffId, false);
+      handleSelectStaffId(ownedStaff?.staffId || activeStaff[0].staffId, false);
     }
-  }, [activeStaff, selectedStaffId]);
+  }, [isAdmin, activeStaff, selectedStaffId, ownedStaff?.staffId]);
 
   const summaries = useMemo(
     () =>
@@ -332,22 +376,27 @@ function WorkspaceApp({ user }: { user: User }) {
   };
 
   const handleOpenDepartmentRoster = (staffId?: string) => {
-    setHighlightRosterStaffId(staffId || selectedStaffId);
+    setHighlightRosterStaffId(staffId || effectiveSelectedStaffId);
     setActiveView('roster');
   };
 
   const handleOpenWorkloadRoster = (staffId?: string) => {
-    setHighlightRosterStaffId(staffId || selectedStaffId);
+    setHighlightRosterStaffId(staffId || effectiveSelectedStaffId);
     setActiveView('workload-roster');
   };
 
   const handleOpenSmcRoster = (staffId?: string) => {
-    setHighlightRosterStaffId(staffId || selectedStaffId);
+    setHighlightRosterStaffId(staffId || effectiveSelectedStaffId);
     setActiveView('smc-roster');
   };
 
   const handleEditStaffFromRoster = (staffId: string) => {
-    handleSelectStaffId(staffId);
+    if (!isAdmin && staffId !== ownedStaff?.staffId) {
+      return;
+    }
+    if (isAdmin) {
+      handleSelectStaffId(staffId);
+    }
     setActiveView('my-shifts');
   };
 
@@ -420,41 +469,78 @@ function WorkspaceApp({ user }: { user: User }) {
           })}
         </nav>
 
-        {/* Staff Profile Switcher & Authenticated Account Box */}
+        {/* Staff Profile Switcher (Admin Only) / Bound Self Profile (Staff) & Account Box */}
         <div className="p-4 border-t border-slate-200 space-y-3">
-          <div className="space-y-1.5">
-            <label
-              htmlFor="sidebar-staff-picker"
-              className="block text-[11px] font-semibold text-slate-500"
-            >
-              เลือกชื่อบุคลากรเพื่อลงเวร
-            </label>
-            {activeStaff.length > 0 ? (
-              <select
-                id="sidebar-staff-picker"
-                value={selectedStaffId}
-                onChange={(e) => handleSelectStaffId(e.target.value)}
-                className="w-full px-2.5 py-2 text-xs font-medium text-slate-900 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+          {isAdmin ? (
+            <div className="space-y-1.5">
+              <label
+                htmlFor="sidebar-staff-picker"
+                className="flex items-center justify-between text-[11px] font-semibold text-teal-800"
               >
-                {activeStaff.map((s) => (
-                  <option key={s.staffId} value={s.staffId}>
-                    {s.orderIndex}. {s.fullName} ({CATEGORY_SHORT_LABELS[s.category]})
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="text-xs text-slate-500">ยังไม่มีรายชื่อบุคลากร</div>
-            )}
-          </div>
+                <span>เลือกชื่อลงเวร (Admin)</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-teal-700" />
+              </label>
+              {activeStaff.length > 0 ? (
+                <select
+                  id="sidebar-staff-picker"
+                  value={effectiveSelectedStaffId}
+                  onChange={(e) => handleSelectStaffId(e.target.value)}
+                  className="w-full px-2.5 py-2 text-xs font-medium text-slate-900 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-600"
+                >
+                  {activeStaff.map((s) => (
+                    <option key={s.staffId} value={s.staffId}>
+                      {s.orderIndex}. {s.fullName} ({CATEGORY_SHORT_LABELS[s.category]})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="text-xs text-slate-500">ยังไม่มีรายชื่อบุคลากร</div>
+              )}
+            </div>
+          ) : ownedStaff ? (
+            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-1">
+              <div className="flex items-center gap-1 text-[10px] font-semibold text-teal-700">
+                <Lock className="w-3 h-3 shrink-0" />
+                <span>ลงเวรเฉพาะชื่อของตนเอง</span>
+              </div>
+              <div className="text-xs font-semibold text-slate-900 truncate" title={ownedStaff.fullName}>
+                {ownedStaff.orderIndex}. {ownedStaff.fullName}
+              </div>
+              <div className="text-[11px] text-slate-500 truncate">
+                {CATEGORY_SHORT_LABELS[ownedStaff.category]}
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setActiveView('my-shifts')}
+              className="w-full text-left p-2.5 rounded-lg bg-amber-50 hover:bg-amber-100/80 border border-amber-200 transition-colors space-y-1 cursor-pointer"
+            >
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-800">
+                <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                <span>ยังไม่ได้ผูกชื่อของคุณ</span>
+              </div>
+              <div className="text-[11px] text-amber-700">
+                กดเพื่อเลือกชื่อบุคลากรของตนเองก่อนลงเวร
+              </div>
+            </button>
+          )}
 
           <div className="pt-2.5 border-t border-slate-100 space-y-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-full bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center shrink-0">
-                <UserIcon className="w-4 h-4" />
+                {isAdmin ? <ShieldCheck className="w-4 h-4" /> : <UserIcon className="w-4 h-4" />}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold text-slate-900 truncate">
-                  {accountDisplayName}
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-xs font-semibold text-slate-900 truncate">
+                    {accountDisplayName}
+                  </span>
+                  {isAdmin && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold text-teal-800 bg-teal-50 border border-teal-200 rounded shrink-0">
+                      Admin
+                    </span>
+                  )}
                 </div>
                 {displayUsername && (
                   <div className="text-[11px] text-slate-500 truncate">
@@ -534,36 +620,70 @@ function WorkspaceApp({ user }: { user: User }) {
               })}
             </nav>
             <div className="p-4 border-t border-slate-200 space-y-3">
-              {activeStaff.length > 0 && (
-                <div className="space-y-1.5">
-                  <label className="block text-[11px] font-semibold text-slate-500">
-                    เลือกชื่อบุคลากรเพื่อลงเวร
-                  </label>
-                  <select
-                    value={selectedStaffId}
-                    onChange={(e) => {
-                      handleSelectStaffId(e.target.value);
-                      setMobileMenuOpen(false);
-                    }}
-                    className="w-full px-2.5 py-2 text-xs font-medium text-slate-900 bg-slate-50 border border-slate-300 rounded-lg"
-                  >
-                    {activeStaff.map((s) => (
-                      <option key={s.staffId} value={s.staffId}>
-                        {s.orderIndex}. {s.fullName}
-                      </option>
-                    ))}
-                  </select>
+              {isAdmin ? (
+                activeStaff.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="flex items-center justify-between text-[11px] font-semibold text-teal-800">
+                      <span>เลือกชื่อลงเวร (Admin)</span>
+                      <ShieldCheck className="w-3.5 h-3.5 text-teal-700" />
+                    </label>
+                    <select
+                      value={effectiveSelectedStaffId}
+                      onChange={(e) => {
+                        handleSelectStaffId(e.target.value);
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full px-2.5 py-2 text-xs font-medium text-slate-900 bg-slate-50 border border-slate-300 rounded-lg"
+                    >
+                      {activeStaff.map((s) => (
+                        <option key={s.staffId} value={s.staffId}>
+                          {s.orderIndex}. {s.fullName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              ) : ownedStaff ? (
+                <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-0.5">
+                  <div className="flex items-center gap-1 text-[10px] font-semibold text-teal-700">
+                    <Lock className="w-3 h-3 shrink-0" />
+                    <span>ลงเวรเฉพาะชื่อของตนเอง</span>
+                  </div>
+                  <div className="text-xs font-semibold text-slate-900 truncate">
+                    {ownedStaff.orderIndex}. {ownedStaff.fullName}
+                  </div>
                 </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveView('my-shifts');
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full text-left p-2.5 rounded-lg bg-amber-50 border border-amber-200 space-y-0.5"
+                >
+                  <div className="text-[11px] font-semibold text-amber-800">
+                    ยังไม่ได้ผูกชื่อของคุณ
+                  </div>
+                  <div className="text-[11px] text-amber-700">กดเพื่อเลือกชื่อก่อนลงเวร</div>
+                </button>
               )}
 
               <div className="pt-2.5 border-t border-slate-100 space-y-2">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-8 h-8 rounded-full bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center shrink-0">
-                    <UserIcon className="w-4 h-4" />
+                    {isAdmin ? <ShieldCheck className="w-4 h-4" /> : <UserIcon className="w-4 h-4" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs font-semibold text-slate-900 truncate">
-                      {accountDisplayName}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-xs font-semibold text-slate-900 truncate">
+                        {accountDisplayName}
+                      </span>
+                      {isAdmin && (
+                        <span className="px-1.5 py-0.5 text-[10px] font-bold text-teal-800 bg-teal-50 border border-teal-200 rounded shrink-0">
+                          Admin
+                        </span>
+                      )}
                     </div>
                     {displayUsername && (
                       <div className="text-[11px] text-slate-500 truncate">
@@ -698,7 +818,12 @@ function WorkspaceApp({ user }: { user: User }) {
             <>
               {activeView === 'my-shifts' && (
                 <MyShiftEntryView
-                  selectedStaffId={selectedStaffId}
+                  currentUserUid={user.uid}
+                  currentUserEmail={user.email || `${user.uid}@bangphli.local`}
+                  currentUserDisplayName={accountDisplayName}
+                  isAdmin={isAdmin}
+                  ownedStaff={ownedStaff}
+                  selectedStaffId={effectiveSelectedStaffId}
                   onSelectStaffId={handleSelectStaffId}
                   staffList={staffList}
                   month={effectiveMonth}
@@ -713,6 +838,8 @@ function WorkspaceApp({ user }: { user: User }) {
 
               {activeView === 'roster' && (
                 <DepartmentRosterView
+                  currentUserUid={user.uid}
+                  isAdmin={isAdmin}
                   month={effectiveMonth}
                   settings={settings}
                   summaries={summaries}
@@ -726,6 +853,8 @@ function WorkspaceApp({ user }: { user: User }) {
 
               {activeView === 'workload-roster' && (
                 <WorkloadRosterView
+                  currentUserUid={user.uid}
+                  isAdmin={isAdmin}
                   month={effectiveMonth}
                   settings={settings}
                   summaries={summaries}
@@ -737,6 +866,8 @@ function WorkspaceApp({ user }: { user: User }) {
 
               {activeView === 'smc-roster' && (
                 <SmcRosterView
+                  currentUserUid={user.uid}
+                  isAdmin={isAdmin}
                   month={effectiveMonth}
                   settings={settings}
                   summaries={summaries}
@@ -757,6 +888,8 @@ function WorkspaceApp({ user }: { user: User }) {
 
               {activeView === 'dashboard' && (
                 <DashboardView
+                  currentUserUid={user.uid}
+                  isAdmin={isAdmin}
                   month={effectiveMonth}
                   settings={settings}
                   summaries={summaries}
@@ -770,6 +903,9 @@ function WorkspaceApp({ user }: { user: User }) {
 
               {activeView === 'staff' && (
                 <StaffDirectoryView
+                  currentUserUid={user.uid}
+                  isAdmin={isAdmin}
+                  isBootstrappedAdmin={isBootstrappedAdmin}
                   staffList={staffList}
                   onSwitchToOctober2569={() => setSelectedMonthId(OCTOBER_2569_MONTH_ID)}
                 />
@@ -777,6 +913,7 @@ function WorkspaceApp({ user }: { user: User }) {
 
               {activeView === 'settings' && (
                 <DepartmentSettingsView
+                  isAdmin={isAdmin}
                   settings={settings}
                   month={effectiveMonth}
                 />
